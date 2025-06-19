@@ -1,0 +1,12 @@
+encryptON=1
+categorizeON=0
+RNS_limbs=0
+withNTT=0
+logN=3
+firstMod=60
+scaleMod=50
+gap=0
+logMin=0
+logMax=7
+seeds=1
+input_seeds=2

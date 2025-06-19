@@ -1,0 +1,29 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+   	 {
+   		 "name": "Mati-Debugger",
+   		 "type": "cppdbg",
+   		 "request": "launch",
+   		 "program": "${workspaceFolder}/bin/test",
+   		 "args": ["1", "1"],
+   		 "stopAtEntry": false,
+         "cwd": "${workspaceFolder}",
+   		 "environment": [],
+   		 "externalConsole": false,
+   		 "MIMode": "gdb",
+		 "setupCommands": [
+			{
+				"description": "Skip header files in bits directory",
+				"text": "-interpreter-exec console \"skip -gfi **/bits/*.h\"",
+				"ignoreFailures": true
+			},
+			{
+				"description": "Enable pretty-printing for gdb",
+				"text": "-enable-pretty-printing",
+				"ignoreFailures": true
+			}
+		 ]
+   	 }
+    ]
+}
