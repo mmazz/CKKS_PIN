@@ -1,5 +1,13 @@
 
+# OpenFHE static
 
+'''
+cmake -DCMAKE_INSTALL_PREFIX=$HOME/ckksPin/openfhe-static -DBUILD_STATIC=ON \
+      -DBUILD_SHARED=OFF -DCMAKE_BUILD_TYPE=Release -DWITH_OPENMP=OFF \
+      -DBUILD_UNITTESTS=OFF -DBUILD_BENCHMARKS=OFF -DBUILD_EXTRAS=OFF ..
+
+make -j16
+'''
 # PIN
 
 We compile it with g++-11.
@@ -11,19 +19,24 @@ export CC=gcc-11
 export CXX=g++-11
 '''
 
+### Bug
+
+Hay un bug en: components/include/util/range.hpp
+
+en vez de m_base en la linea 102, tiene que ir _base.
+
 ## Use of PIN
 
-First we export a env variable.
-In my machine pin is installed in:
-'''
-export PIN_ROOT=/opt/pin
-'''
+First we export a env variable for gcc-11
+
+Put the tool in pin/source/tools/SimpleExamples
+
+And inside that directory do:
 
 '''
-g++ -Wall -Werror -O2 -fPIC -std=c++11 -I${PIN_ROOT}/source/include/pin \
-    -I${PIN_ROOT}/source/include/pin/gen \
-    -c mytool.cpp -o mytool.o
+sudo make obj-intel64/my_tool.so TARGET=intel64
 '''
+
 
 
 Second we need to find the symbol of the function that we want to tackle.
