@@ -34,17 +34,6 @@ int main(int argc, char* argv[]) {
     std::ofstream norm2File(dir_log+"log_norm2/out_norm2"+endFile);
     std::cout << dir_log << " asd" << std::endl;
     uint32_t multDepth = RNS_size;
-    pid_t pid = getpid();
-    std::string pid_str = std::to_string(pid);
-    std::string seedFileStr = "seeds/seed_"+pid_str+".txt";
-    std::ofstream seedFile(seedFileStr, std::ofstream::out);
-            // Verifica si el archivo se abrió correctamente
-    if (!seedFile.is_open()) {
-        std::cerr << "No se pudo abrir el archivo de semillas en " << seedFileStr << std::endl;
-        return 1;
-    }
-    seedFile << seed;
-    seedFile.close();
 
     uint32_t batchSize = ringDim >> 1;
     if(gap>0)
@@ -86,8 +75,21 @@ int main(int argc, char* argv[]) {
         double norm2_abs = 0;
         std::string norms2;
         c = cc->Encrypt(keys.publicKey, ptxt1);
-        c->GetElements()[k].GetAllElements()[i][j];
+    // 1) Suponiendo que ya tienes un std::shared_ptr<CT> c1
+        auto raw_ctxt = c.get();
+        uintptr_t base = reinterpret_cast<uintptr_t>(raw_ctxt);
 
+        // 2) Navega al coeficiente [0][0][0] (elemento k=0, i=0, j=0)
+        auto& el = raw_ctxt
+                   ->GetElements()[0]         // primer DCRTPoly
+                   .GetAllElements()[0]       // primer NativeVector
+                   [0];                       // primer uint64_t
+
+        // 3) Toma su dirección y calcula el offset
+        uintptr_t el_addr = reinterpret_cast<uintptr_t>(&el);
+        uintptr_t offset  = el_addr - base;
+        std::cout
+          << "OFFSET_COEFF=" << offset << "\n";
         cc->Decrypt(keys.secretKey, c, &result_bitFlip);
         result_bitFlip->SetLength(batchSize);
         std::vector<double> result_bitFlip_vec = result_bitFlip->GetRealPackedValue();
