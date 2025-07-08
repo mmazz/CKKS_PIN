@@ -19,7 +19,7 @@ cmake_minimum_required(VERSION 3.5.1)
 project(demo CXX)
 set(CMAKE_CXX_STANDARD 17)
 option(BUILD_STATIC "Set to ON to include static versions of the library" OFF)
-
+set(BUILD_SHARED_LIBS OFF)
 find_package(OpenFHE CONFIG REQUIRED)
 if(OpenFHE_FOUND)
     message(STATUS "FOUND PACKAGE OpenFHE")
@@ -40,6 +40,7 @@ include_directories(${OpenFHE_INCLUDE}/third-party/include)
 include_directories(${OpenFHE_INCLUDE}/core)
 include_directories(${OpenFHE_INCLUDE}/pke)
 include_directories(${OpenFHE_INCLUDE}/binfhe)
+### add directories for other OpenFHE modules as needed for your project
 
 link_directories(${OpenFHE_LIBDIR})
 link_directories(${OPENMP_LIBRARIES})

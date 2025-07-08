@@ -29,8 +29,10 @@ else
 fi
 
 mkdir -p analysis/img
-mkdir src
-mkdir build
+mkdir -p src
+mkdir -p build
+INSTALL_PATH_SRC=$PWD/$OPENFHE_DIR/install/lib/OpenFHE
+echo "Installing on " $INSTALL_PATH_SRC
 cd build
-cmake -DCMAKE_PREFIX_PATH=$PWD/$OPENFHE_DIR/install/lib/OpenFHE -DBUILD_STATIC=OFF -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS="-g" ..
+cmake -DCMAKE_PREFIX_PATH=$INSTALL_PATH_SRC -DBUILD_STATIC=OFF -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS="-g" ..
 make -j16
