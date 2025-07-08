@@ -40,7 +40,6 @@ include_directories(${OpenFHE_INCLUDE}/third-party/include)
 include_directories(${OpenFHE_INCLUDE}/core)
 include_directories(${OpenFHE_INCLUDE}/pke)
 include_directories(${OpenFHE_INCLUDE}/binfhe)
-### add directories for other OpenFHE modules as needed for your project
 
 link_directories(${OpenFHE_LIBDIR})
 link_directories(${OPENMP_LIBRARIES})
@@ -52,20 +51,19 @@ else()
     link_libraries(${OpenFHE_SHARED_LIBRARIES})
 endif()
 
-
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-add_library(mainlib_common utils.cpp)
-target_include_directories(mainlib_common PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+# Definí la librería desde src/
+add_library(mainlib_common src/utils.cpp)
+target_include_directories(mainlib_common PUBLIC src)
 
-add_executable(bitflip test.cpp)
-set_target_properties(bitflip PROPERTIES
+# Definí el ejecutable desde src/
+add_executable(test src/test.cpp)
+set_target_properties(test PROPERTIES
     BUILD_WITH_INSTALL_RPATH TRUE
     BUILD_RPATH_USE_ORIGIN TRUE
 )
-target_link_libraries(bitflip PRIVATE mainlib_common ${OpenFHE_SHARED_LIBRARIES})
-
-
+target_link_libraries(test PRIVATE mainlib_common ${OpenFHE_SHARED_LIBRARIES})
 
