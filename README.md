@@ -9,15 +9,13 @@ cmake -DCMAKE_PREFIX_PATH=$CURDIR/../openfhe-PRNGControl/install\
 make -j16
 sudo make install
 '''
+
+
 # PIN
 
-We compile it with g++-11.
-
-In case of arch linux distro or similar roling release distro, install another version
-like gcc-11, and then before ejecute makefile export these variables.
 '''
-export CC=gcc-11
-export CXX=g++-11
+export CKKS_CONFIG_PATH="$HOME/CKKS_PIN"
+
 '''
 
 ### Bug

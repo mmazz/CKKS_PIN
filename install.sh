@@ -45,3 +45,4 @@ rm -rf pin-external-3.31-98869-gfa6f126a8-gcc-linux.tar.gz
 mv pin-external-3.31-98869-gfa6f126a8-gcc-linux/* pin/
 rmdir pin-external-3.31-98869-gfa6f126a8-gcc-linux
 patch -p0 < range.patch
+export CKKS_CONFIG_PATH="$HOME/CKKS_PIN"

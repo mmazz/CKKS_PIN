@@ -31,8 +31,9 @@ else()
     message(FATAL_ERROR "PACKAGE OpenFHE NOT FOUND")
 endif()
 
+set(ENV{CKKS_CONFIG_PATH} "$ENV{HOME}/CKKS_PIN")
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_FLAGS ${OpenFHE_CXX_FLAGS})
-
 include_directories(${OPENMP_INCLUDES})
 include_directories(${OpenFHE_INCLUDE})
 include_directories(${OpenFHE_INCLUDE}/third-party/include)
