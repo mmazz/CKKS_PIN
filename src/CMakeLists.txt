@@ -56,11 +56,11 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 # Definí la librería desde src/
-add_library(mainlib_common src/utils.cpp)
+add_library(mainlib_common utils.cpp)
 target_include_directories(mainlib_common PUBLIC src)
 
 # Definí el ejecutable desde src/
-add_executable(test src/test.cpp)
+add_executable(test test.cpp)
 set_target_properties(test PROPERTIES
     BUILD_WITH_INSTALL_RPATH TRUE
     BUILD_RPATH_USE_ORIGIN TRUE

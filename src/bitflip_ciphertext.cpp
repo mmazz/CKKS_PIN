@@ -79,6 +79,11 @@ int main(int argc, char* argv[]) {
         addr_file << std::hex << reinterpret_cast<uintptr_t>(&c_ptr);
         addr_file.close();
         std::cout << "Address of target: 0x" << std::hex << &c_ptr << std::dec << std::endl;
+
+        asm(".global _checkpoint_label\n"
+            "_checkpoint_label:\n\t"
+            "nop\n");
+
         cc->Decrypt(keys.secretKey, c, &result_bitFlip);
         result_bitFlip->SetLength(batchSize);
         std::vector<double> result_bitFlip_vec = result_bitFlip->GetRealPackedValue();

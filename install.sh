@@ -20,7 +20,7 @@ if [[ ! -d "$OPENFHE_DIR/build" ]]; then
     cd $OPENFHE_DIR/build
     cmake -DCMAKE_INSTALL_PREFIX=$INSTALL_PATH/install -DBUILD_STATIC=ON -DBUILD_SHARED=OFF \
       -DCMAKE_BUILD_TYPE=Debug -DWITH_OPENMP=OFF -DBUILD_UNITTESTS=OFF \
-      -DBUILD_BENCHMARKS=OFF -DBUILD_EXTRAS=OFF -DCMAKE_CXX_FLAGS="-g" ..
+      -DBUILD_BENCHMARKS=OFF -DBUILD_EXTRAS=OFF -DCMAKE_CXX_FLAGS="-g -O3" ..
     make -j16
     sudo make install
     cd ../..
@@ -34,5 +34,15 @@ mkdir -p build
 INSTALL_PATH_SRC=$PWD/$OPENFHE_DIR/install/lib/OpenFHE
 echo "Installing on " $INSTALL_PATH_SRC
 cd build
-cmake -DCMAKE_PREFIX_PATH=$INSTALL_PATH_SRC -DBUILD_STATIC=ON -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS="-g" ..
+cmake -DCMAKE_PREFIX_PATH=$INSTALL_PATH_SRC -DBUILD_STATIC=ON -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS="-g -O0 -fno-pie -no-pie" ../src
 make -j16
+cd ..
+mkdir pin
+cd pin
+wget https://software.intel.com/sites/landingpage/pintool/downloads/pin-external-3.31-98869-gfa6f126a8-gcc-linux.tar.gz
+tar -xvzf pin-external-3.31-98869-gfa6f126a8-gcc-linux.tar.gz
+rm -rf pin-external-3.31-98869-gfa6f126a8-gcc-linux.tar.gz
+mv pin-external-3.31-98869-gfa6f126a8-gcc-linux/* .
+rmdir pin-external-3.31-98869-gfa6f126a8-gcc-linux
+cd ..
+patch -p1 range.patch

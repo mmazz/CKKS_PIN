@@ -1,11 +1,11 @@
 
-# OpenFHE static
+# Install
 
 '''
-cmake -DCMAKE_INSTALL_PREFIX=$HOME/ckksPin/openfhe-PRNGControl/install -DBUILD_STATIC=ON -DBUILD_SHARED=OFF \
-      -DCMAKE_BUILD_TYPE=Debug -DWITH_OPENMP=OFF -DBUILD_UNITTESTS=OFF \
-      -DBUILD_BENCHMARKS=OFF -DBUILD_EXTRAS=OFF -DCMAKE_CXX_FLAGS="-g" ..
-
+cmake -DCMAKE_PREFIX_PATH=$CURDIR/../openfhe-PRNGControl/install\
+      -DBUILD_STATIC=ON \
+      -DCMAKE_BUILD_TYPE=Debug \
+      -DCMAKE_CXX_FLAGS="-g -O3 -fno-pie -no-pie" ../src
 make -j16
 sudo make install
 '''

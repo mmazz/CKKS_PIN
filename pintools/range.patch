@@ -1,11 +1,11 @@
---- range_orig.hpp	2025-07-10 11:01:07.410681852 -0300
-+++ range.hpp	2025-07-10 11:01:24.354975230 -0300
+--- pin/extras/components/include/util/range_orig.hpp	2025-07-10 11:01:07.410681852 -0300
++++ pin/extras/components/include/util/range.hpp	2025-07-10 11:01:24.354975230 -0300
 @@ -99,7 +99,7 @@
       *
       * @return  TRUE if range contains \a range.
       */
 -    bool Contains(const RANGE& range) const { return (Contains(range.m_base) && !range.Contains(GetEnd())); }
 +    bool Contains(const RANGE& range) const { return (Contains(range._base) && !range.Contains(GetEnd())); }
- 
+
    private:
      ADDRTYPE _base;
