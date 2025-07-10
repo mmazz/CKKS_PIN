@@ -37,12 +37,11 @@ cd build
 cmake -DCMAKE_PREFIX_PATH=$INSTALL_PATH_SRC -DBUILD_STATIC=ON -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS="-g -O0 -fno-pie -no-pie" ../src
 make -j16
 cd ..
+cd pintools
 mkdir pin
-cd pin
 wget https://software.intel.com/sites/landingpage/pintool/downloads/pin-external-3.31-98869-gfa6f126a8-gcc-linux.tar.gz
 tar -xvzf pin-external-3.31-98869-gfa6f126a8-gcc-linux.tar.gz
 rm -rf pin-external-3.31-98869-gfa6f126a8-gcc-linux.tar.gz
-mv pin-external-3.31-98869-gfa6f126a8-gcc-linux/* .
+mv pin-external-3.31-98869-gfa6f126a8-gcc-linux/* pin/
 rmdir pin-external-3.31-98869-gfa6f126a8-gcc-linux
-cd ..
-patch -p1 range.patch
+patch -p0 < range.patch
