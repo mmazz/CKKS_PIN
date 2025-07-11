@@ -1,8 +1,14 @@
 #include "openfhe.h"
 #include "utils.h"
 
-
-int testVariable = 0;
+#define SAVEADDRES_LABEL(name) \
+    asm volatile( \
+        ".global " #name "\n\t" \
+        ".type " #name ", @function\n\t" \
+        #name ":\n\t" \
+        "nop\n\t" \
+        ::: "memory" \
+    );
 int main(int argc, char* argv[]) {
     if (argc < 3) {
         std::cerr << "Need number of seeds and number seeds input \n";
@@ -31,7 +37,6 @@ int main(int argc, char* argv[]) {
     std::string endFile = "_" + std::to_string(seed) + "_" + std::to_string(seed_input) + ".txt";
 
     std::ofstream norm2File(dir_log+"log_norm2/out_norm2"+endFile);
-    std::cout << dir_log << " asd" << std::endl;
     uint32_t multDepth = RNS_size;
 
     uint32_t batchSize = ringDim >> 1;
@@ -55,8 +60,6 @@ int main(int argc, char* argv[]) {
     std::vector<double> input = uniform_dist(batchSize, logMin, logMax, seed_input, false);
 
     Plaintext ptxt1 = cc->MakeCKKSPackedPlaintext(input);
-    bool (lbcrypto::CKKSPackedEncoding::*a)() = &lbcrypto::CKKSPackedEncoding::Encode;
-    std::cout << a << std::endl;
     auto c_original = cc->Encrypt(keys.publicKey, ptxt1);
     auto c = cc->Encrypt(keys.publicKey, ptxt1);
 
@@ -75,14 +78,15 @@ int main(int argc, char* argv[]) {
         auto raw_ctxt = c.get();
 
         auto& c_ptr = raw_ctxt->GetElements()[0].GetAllElements()[0][0];
+        auto c_val = c->GetElements()[0].GetAllElements()[0][0];
         std::ofstream addr_file(std::string(home)+"/CKKS_PIN/pintools/bitflips/target_address.txt");
         addr_file << std::hex << reinterpret_cast<uintptr_t>(&c_ptr);
         addr_file.close();
+
+
         std::cout << "Address of target: 0x" << std::hex << &c_ptr << std::dec << std::endl;
 
-        asm(".global _checkpoint_label\n"
-            "_checkpoint_label:\n\t"
-            "nop\n");
+        SAVEADDRES_LABEL(addr_file)
 
         cc->Decrypt(keys.secretKey, c, &result_bitFlip);
         result_bitFlip->SetLength(batchSize);
@@ -92,7 +96,7 @@ int main(int argc, char* argv[]) {
         norms2.append(std::to_string(norm2_abs)+ ", ");
         if (norm2File.is_open())
             norm2File << norms2;
-        std::cout << "Variable test was 0, now: " << testVariable << std::endl;
+        std::cout << "Variable test was "<< c_val  <<", now: " << c->GetElements()[0].GetAllElements()[0][0]<< std::endl;
     }
     else
         std::cout << "ERROR!!! Norm2: " << golden_norm2 << "  Input/output: " << input << " " << golden_result  << std::endl;

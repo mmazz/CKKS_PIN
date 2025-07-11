@@ -65,6 +65,7 @@ int main(int argc, char* argv[]) {
     golden_result->SetLength(batchSize);
     std::vector<double> golden_result_vec = golden_result->GetRealPackedValue();
     double golden_norm2 = norm2(input, golden_result_vec, batchSize);
+    std::cout << "Dirección: 0x" << std::hex << (uintptr_t)&testVariable << std::dec << std::endl;
 
     if (golden_norm2 < 0.1)
     {
@@ -72,13 +73,7 @@ int main(int argc, char* argv[]) {
         double norm2_abs = 0;
         std::string norms2;
         c = cc->Encrypt(keys.publicKey, ptxt1);
-        auto raw_ctxt = c.get();
 
-        auto& c_ptr = raw_ctxt->GetElements()[0].GetAllElements()[0][0];
-        std::ofstream addr_file(std::string(home)+"/CKKS_PIN/pintools/bitflips/target_address.txt");
-        addr_file << std::hex << reinterpret_cast<uintptr_t>(&c_ptr);
-        addr_file.close();
-        std::cout << "Address of target: 0x" << std::hex << &c_ptr << std::dec << std::endl;
         cc->Decrypt(keys.secretKey, c, &result_bitFlip);
         result_bitFlip->SetLength(batchSize);
         std::vector<double> result_bitFlip_vec = result_bitFlip->GetRealPackedValue();
