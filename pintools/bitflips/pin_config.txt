@@ -1,0 +1,3 @@
+variable_addr=0x8c4ce0
+checkpoint_addr=0x0
+action=wait
