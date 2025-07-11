@@ -6,10 +6,14 @@
 #include <sstream>
 
 // Knob para recibir -bit (mantenemos este)
+static KNOB<UINT32> KnobTargetCoeff(
+    KNOB_MODE_WRITEONCE, "pintool", "coeff", "0",
+    "Which coeff [0-ringDim] to flip. ");
+
+// Knob para recibir -bit (mantenemos este)
 static KNOB<UINT32> KnobTargetBit(
     KNOB_MODE_WRITEONCE, "pintool", "bit", "0",
-    "Which bit [0-7] to flip");
-
+    "Which bit [0-63] to flip");
 // Knob para forzar lectura inmediata del archivo (sin esperar label)
 static KNOB<bool> KnobForceRead(
     KNOB_MODE_WRITEONCE, "pintool", "force", "false",
@@ -116,10 +120,12 @@ VOID FlipBitOnAccess(ADDRINT addr)
     }
 
     // Acceder a la memoria directamente
-    UINT8* ptr = reinterpret_cast<UINT8*>(addr);
-    UINT8 originalValue = *ptr;
-    UINT8 mask = UINT8(1u << KnobTargetBit.Value());
+    UINT64* ptr = reinterpret_cast<UINT64*>(addr) + KnobTargetCoeff.Value();
+    UINT64 originalValue = *ptr;
+    UINT64 mask = UINT64(UINT64(1ULL) << KnobTargetBit.Value());
 
+    std::cerr << "[bitflip] Mask use: " << mask << std::endl;
+    std::cerr << "[bitflip] Target: " << *ptr << std::endl;
     // Realizar el flip del bit
     *ptr ^= mask;
 
@@ -199,7 +205,7 @@ VOID RoutineCallback(RTN rtn, VOID*)
 
         // Buscar el label trigger
         std::string routineName = RTN_Name(rtn);
-        std::cerr << "[bitflip] DEBUG: Found routine: " << routineName << std::endl;
+        //std::cerr << "[bitflip] DEBUG: Found routine: " << routineName << std::endl;
 
         if (routineName == KnobTriggerLabel.Value()) {
             std::cerr << "[bitflip] Found trigger label: " << routineName << std::endl;
@@ -235,8 +241,14 @@ int main(int argc, char* argv[])
     }
 
     // Validar parámetros
-    if (KnobTargetBit.Value() > 7) {
-        std::cerr << "ERROR: Bit position must be between 0 and 7" << std::endl;
+    if (KnobTargetBit.Value() >= 64) {
+        std::cerr << "ERROR: Bit position must be between 0 and 63" << std::endl;
+        return 1;
+    }
+
+    // Validar parámetros
+    if (KnobTargetCoeff.Value() >= 65536) {
+        std::cerr << "ERROR: Coeff must be between 0 and ringDim" << std::endl;
         return 1;
     }
 

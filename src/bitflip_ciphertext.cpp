@@ -14,7 +14,8 @@ int main(int argc, char* argv[]) {
         std::cerr << "Need number of seeds and number seeds input \n";
         return 1;
     }
-    int seed = std::stoi(argv[1]);
+  //  int seed = std::stoi(argv[1]);
+    int coeff = std::stoi(argv[1]);
     int seed_input = std::stoi(argv[2]);
     const char* home = getenv("HOME");
     auto config = loadConfig(std::string(home)+"/CKKS_PIN/config.txt");
@@ -34,9 +35,9 @@ int main(int argc, char* argv[]) {
                                         std::to_string(scaleMod) + "_" + std::to_string(gap) +"_" + std::to_string(logMin) + "_" + std::to_string(logMax) +"/";
 
     std::string dir_log = prelog + info;
-    std::string endFile = "_" + std::to_string(seed) + "_" + std::to_string(seed_input) + ".txt";
+  //  std::string endFile = "_" + std::to_string(seed) + "_" + std::to_string(seed_input) + ".txt";
 
-    std::ofstream norm2File(dir_log+"log_norm2/out_norm2"+endFile);
+  //  std::ofstream norm2File(dir_log+"log_norm2/out_norm2"+endFile);
     uint32_t multDepth = RNS_size;
 
     uint32_t batchSize = ringDim >> 1;
@@ -78,7 +79,7 @@ int main(int argc, char* argv[]) {
         auto raw_ctxt = c.get();
 
         auto& c_ptr = raw_ctxt->GetElements()[0].GetAllElements()[0][0];
-        auto c_val = c->GetElements()[0].GetAllElements()[0][0];
+        auto c_val = c->GetElements()[0].GetAllElements()[0][coeff];
         std::ofstream addr_file(std::string(home)+"/CKKS_PIN/pintools/bitflips/target_address.txt");
         addr_file << std::hex << reinterpret_cast<uintptr_t>(&c_ptr);
         addr_file.close();
@@ -94,9 +95,9 @@ int main(int argc, char* argv[]) {
 
         norm2_abs = norm2(golden_result_vec, result_bitFlip_vec,batchSize);
         norms2.append(std::to_string(norm2_abs)+ ", ");
-        if (norm2File.is_open())
-            norm2File << norms2;
-        std::cout << "Variable test was "<< c_val  <<", now: " << c->GetElements()[0].GetAllElements()[0][0]<< std::endl;
+   //     if (norm2File.is_open())
+   //         norm2File << norms2;
+        std::cout << "Variable test was "<< c_val  <<", now: " << c->GetElements()[0].GetAllElements()[0][coeff]<< std::endl;
     }
     else
         std::cout << "ERROR!!! Norm2: " << golden_norm2 << "  Input/output: " << input << " " << golden_result  << std::endl;
