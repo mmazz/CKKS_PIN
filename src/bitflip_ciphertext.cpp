@@ -1,26 +1,17 @@
 #include "openfhe.h"
 #include "utils.h"
 
-#define SAVEADDRES_LABEL(name) \
-    asm volatile( \
-        ".global " #name "\n\t" \
-        ".type " #name ", @function\n\t" \
-        #name ":\n\t" \
-        "nop\n\t" \
-        ::: "memory" \
-    );
+// 1) En un encabezado común (o justo encima de tu uso):
+extern "C" void addr_file();
+// Aquí defines el símbolo vacío que PIN instrumentará.
+asm(
+    ".global addr_file       \n"
+    ".type   addr_file, @function \n"
+    "addr_file:              \n"
+    "    nop                 \n"
+    "    ret                 \n"
+);
 
-#define CHECKPOINT_LABEL(name) \
-    asm volatile( \
-        ".global " #name "\n\t" \
-        ".type " #name ", @function\n\t" \
-        #name ":\n\t" \
-        "nop\n\t" \
-        ::: "memory" \
-    );
-void TestFunction(){
-
-}
 int main(int argc, char* argv[]) {
     if (argc < 3) {
         std::cerr << "Need number of seeds and number seeds input \n";
@@ -92,16 +83,13 @@ int main(int argc, char* argv[]) {
 
         auto& c_ptr = raw_ctxt->GetElements()[0].GetAllElements()[0][0];
         auto c_val = c->GetElements()[0].GetAllElements()[0][coeff];
-        std::ofstream addr_file(std::string(home)+"/CKKS_PIN/pintools/bitflips/target_address.txt");
-        addr_file << std::hex << reinterpret_cast<uintptr_t>(&c_ptr);
-        addr_file.close();
 
+        std::ofstream ofs(std::string(home) + "/CKKS_PIN/pintools/bitflips/target_address.txt");
+        ofs << std::hex << reinterpret_cast<uintptr_t>(&c_ptr);
+        ofs.close();
+        addr_file();
 
         std::cout << "Address of target: 0x" << std::hex << &c_ptr << std::dec << std::endl;
-
-SAVEADDRES_LABEL(addr_file)
-CHECKPOINT_LABEL(start_checkpoint)
-        TestFunction();
         cc->Decrypt(keys.secretKey, c, &result_bitFlip);
         result_bitFlip->SetLength(batchSize);
         std::vector<double> result_bitFlip_vec = result_bitFlip->GetRealPackedValue();
@@ -111,7 +99,6 @@ CHECKPOINT_LABEL(start_checkpoint)
         std::cout << "Norm2: " << norm2_abs << std::endl;
    //     if (norm2File.is_open())
    //         norm2File << norms2;
-CHECKPOINT_LABEL(end_checkpoint)
         std::cout << "Variable test was "<< c_val  <<", now: " << c->GetElements()[0].GetAllElements()[0][coeff]<< std::endl;
     }
     else

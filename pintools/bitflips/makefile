@@ -9,8 +9,10 @@
 #
 ##############################################################
 
+TARGET_FUNC=_ZN8lbcrypto17CryptoContextImplINS_12DCRTPolyImplIN9bigintdyn9mubintvecINS2_5ubintImEEEEEEE7DecryptERKSt10shared_ptrIKNS_14CiphertextImplIS7_EEES9_INS_14PrivateKeyImplIS7_EEEPS9_INS_13PlaintextImplEE
+COEFF=1
+BIT=1
 .PHONY: run-pin build-pin
-
 PIN_ROOT = ../pin/
 # If the tool is built out of the kit, PIN_ROOT must be specified in the make invocation and point to the kit root.
 CONFIG_ROOT := $(PIN_ROOT)/source/tools/Config
@@ -19,13 +21,12 @@ include makefile.rules
 include $(TOOLS_ROOT)/Config/makefile.default.rules
 
 
-build-pin:
-	$(MAKE) obj-intel64/pintool_bitflip.so TARGET=intel64
+build-pin: obj-intel64/pintool_bitflip_func.so
+	$(MAKE) obj-intel64/pintool_bitflip_func.so TARGET=intel64
 
 run-pin: build-pin
 	export CKKS_CONFIG_PATH=$$HOME/CKKS_PIN && \
-	../pin/pin -t obj-intel64/pintool_bitflip.so -addr 0x8c4ce0 -bit 0 -- ../../build/bin/test 1 1
-
+	../pin/pin -t obj-intel64/pintool_bitflip_func.so -label addr_file -addr_file target_address.txt -func $(TARGET_FUNC) -instr_index 0 -coeff $(COEFF) -bit $(BIT) -- ../../build/bin/bitflip_check $(COEFF)  1
 
 ##############################################################
 #
