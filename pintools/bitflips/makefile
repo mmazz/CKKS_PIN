@@ -21,12 +21,12 @@ include makefile.rules
 include $(TOOLS_ROOT)/Config/makefile.default.rules
 
 
-build-pin: obj-intel64/pintool_bitflip_func.so
-	$(MAKE) obj-intel64/pintool_bitflip_func.so TARGET=intel64
+build-pin: obj-intel64/pintool_BitFlip.so
+	$(MAKE) obj-intel64/pintool_BitFlip.so TARGET=intel64
 
 run-pin: build-pin
 	export CKKS_CONFIG_PATH=$$HOME/CKKS_PIN && \
-	../pin/pin -t obj-intel64/pintool_bitflip_func.so -label addr_file -addr_file target_address.txt -func $(TARGET_FUNC) -instr_index 0 -coeff $(COEFF) -bit $(BIT) -- ../../build/bin/bitflip_check $(COEFF)  1
+	../pin/pin -t obj-intel64/pintool_BitFlip.so -label addr_file -addr_file target_address.txt -func $(TARGET_FUNC) -instr_index 0 -coeff $(COEFF) -bit $(BIT) -- ../../build/bin/bitflip_check $(COEFF)  1
 
 ##############################################################
 #
