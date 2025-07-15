@@ -24,6 +24,14 @@ static KNOB<std::string> KnobTriggerLabel(
     KNOB_MODE_WRITEONCE, "pintool", "label", "read_address_file",
     "Label name where to read the address file");
 
+static KNOB<std::string> KnobTriggeriFunc(
+    KNOB_MODE_WRITEONCE, "pintool", "func", "Encrypt",
+    "Function before bit flip");
+
+
+std::string target_function_name;
+bool inside_openfhe_function = false;
+bool openfhe_function_found = false;
 // Variable para almacenar la dirección leída del archivo
 static ADDRINT targetAddress = 0;
 
@@ -118,25 +126,29 @@ VOID FlipBitOnAccess(ADDRINT addr)
     if (bitFlipped) {
         return;
     }
-
+    if (!KnobTriggeriFunc.Value().empty() && !inside_openfhe_function) {
+        std::cerr << "[bitflip] Abort Bitflip: " << !KnobTriggeriFunc.Value().empty() << " " << !inside_openfhe_function<< std::endl;
+        // Si se especificó función OpenFHE pero no estamos dentro, no hacer flip
+        return;
+    }
     // Acceder a la memoria directamente
     UINT64* ptr = reinterpret_cast<UINT64*>(addr) + KnobTargetCoeff.Value();
     UINT64 originalValue = *ptr;
     UINT64 mask = UINT64(UINT64(1ULL) << KnobTargetBit.Value());
 
-    std::cerr << "[bitflip] Mask use: " << mask << std::endl;
-    std::cerr << "[bitflip] Target: " << *ptr << std::endl;
+    std::cerr << "[bitflip] Target before bitflip: " << *ptr << std::endl;
     // Realizar el flip del bit
     *ptr ^= mask;
 
     bitFlipped = true;
 
     std::cerr << "[bitflip] SUCCESS: Flipped bit "
-              << KnobTargetBit.Value()
+              << KnobTargetBit.Value() << " target value: " << *ptr
               << " at address 0x" << std::hex << addr
               << " (0x" << std::hex << static_cast<int>(originalValue)
               << " -> 0x" << std::hex << static_cast<int>(*ptr) << ")"
               << std::dec << std::endl;
+    inside_openfhe_function = false;
 }
 
 // Callback para interceptar accesos a memoria
@@ -174,10 +186,16 @@ VOID InstructionCallback(INS ins, VOID*)
         );
     }
 }
+// Callback que se ejecuta al entrar a cualquier función
+VOID OnOpenFHEFunctionEntry() {
+    std::cerr << "[bitflip] Entered OpenFHE function: " << KnobTriggeriFunc.Value() << std::endl;
+    inside_openfhe_function = true;
+}
 
-// Callback alternativo usando imágenes
 VOID ImageCallback(IMG img, VOID*)
 {
+
+    std::cerr << "[bitflip] Found OpenFHE function: " << KnobTriggeriFunc.Value()<< std::endl;
     if (!addressRead) {
         std::cerr << "[bitflip] DEBUG: Loading image: " << IMG_Name(img) << std::endl;
 
@@ -185,12 +203,23 @@ VOID ImageCallback(IMG img, VOID*)
         for (SEC sec = IMG_SecHead(img); SEC_Valid(sec); sec = SEC_Next(sec)) {
             for (RTN rtn = SEC_RtnHead(sec); RTN_Valid(rtn); rtn = RTN_Next(rtn)) {
                 std::string routineName = RTN_Name(rtn);
+             //   std::cerr << routineName << std::endl;
+                // Buscar trigger label original
                 if (routineName == KnobTriggerLabel.Value()) {
                     std::cerr << "[bitflip] Found trigger label in routine: " << routineName << std::endl;
                     RTN_Open(rtn);
                     RTN_InsertCall(rtn, IPOINT_BEFORE, AFUNPTR(OnTriggerLabel), IARG_END);
                     RTN_Close(rtn);
-                    return;
+                }
+
+                // NUEVA FUNCIONALIDAD: Buscar función OpenFHE
+                if (!KnobTriggeriFunc.Value().empty() &&
+                    routineName == KnobTriggeriFunc.Value()) {
+                    std::cerr << "[bitflip] Found OpenFHE function: " << routineName << std::endl;
+                    RTN_Open(rtn);
+                    RTN_InsertCall(rtn, IPOINT_BEFORE, AFUNPTR(OnOpenFHEFunctionEntry), IARG_END);
+                    RTN_Close(rtn);
+                    openfhe_function_found = true;
                 }
             }
         }
@@ -270,9 +299,13 @@ int main(int argc, char* argv[])
     }
     std::cerr << "[bitflip] Target bit: " << KnobTargetBit.Value() << std::endl;
 
+    target_function_name = KnobTriggeriFunc.Value();
+    if (target_function_name.empty()) {
+        std::cerr << "ERROR: Debes especificar una función con -func" << std::endl;
+        return -1;
+    }
     // Inicializar símbolos para mejor debugging
     PIN_InitSymbols();
-
     // Registrar callbacks
     IMG_AddInstrumentFunction(ImageCallback, nullptr);
     RTN_AddInstrumentFunction(RoutineCallback, nullptr);

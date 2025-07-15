@@ -9,6 +9,18 @@
         "nop\n\t" \
         ::: "memory" \
     );
+
+#define CHECKPOINT_LABEL(name) \
+    asm volatile( \
+        ".global " #name "\n\t" \
+        ".type " #name ", @function\n\t" \
+        #name ":\n\t" \
+        "nop\n\t" \
+        ::: "memory" \
+    );
+void TestFunction(){
+
+}
 int main(int argc, char* argv[]) {
     if (argc < 3) {
         std::cerr << "Need number of seeds and number seeds input \n";
@@ -87,16 +99,19 @@ int main(int argc, char* argv[]) {
 
         std::cout << "Address of target: 0x" << std::hex << &c_ptr << std::dec << std::endl;
 
-        SAVEADDRES_LABEL(addr_file)
-
+SAVEADDRES_LABEL(addr_file)
+CHECKPOINT_LABEL(start_checkpoint)
+        TestFunction();
         cc->Decrypt(keys.secretKey, c, &result_bitFlip);
         result_bitFlip->SetLength(batchSize);
         std::vector<double> result_bitFlip_vec = result_bitFlip->GetRealPackedValue();
 
         norm2_abs = norm2(golden_result_vec, result_bitFlip_vec,batchSize);
         norms2.append(std::to_string(norm2_abs)+ ", ");
+        std::cout << "Norm2: " << norm2_abs << std::endl;
    //     if (norm2File.is_open())
    //         norm2File << norms2;
+CHECKPOINT_LABEL(end_checkpoint)
         std::cout << "Variable test was "<< c_val  <<", now: " << c->GetElements()[0].GetAllElements()[0][coeff]<< std::endl;
     }
     else
