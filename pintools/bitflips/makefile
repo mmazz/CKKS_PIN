@@ -12,6 +12,7 @@
 TARGET_FUNC=_ZN8lbcrypto17CryptoContextImplINS_12DCRTPolyImplIN9bigintdyn9mubintvecINS2_5ubintImEEEEEEE7DecryptERKSt10shared_ptrIKNS_14CiphertextImplIS7_EEES9_INS_14PrivateKeyImplIS7_EEEPS9_INS_13PlaintextImplEE
 COEFF=1
 BIT=1
+CKKS_CONFIG_PATH := $(HOME)/CKKS_PIN
 .PHONY: run-pin build-pin
 PIN_ROOT = ../pin/
 # If the tool is built out of the kit, PIN_ROOT must be specified in the make invocation and point to the kit root.
@@ -25,8 +26,16 @@ build-pin: obj-intel64/pintool_BitFlip.so
 	$(MAKE) obj-intel64/pintool_BitFlip.so TARGET=intel64
 
 run-pin: build-pin
-	export CKKS_CONFIG_PATH=$$HOME/CKKS_PIN && \
-	../pin/pin -t obj-intel64/pintool_BitFlip.so -label addr_file -addr_file target_address.txt -func $(TARGET_FUNC) -instr_index 0 -coeff $(COEFF) -bit $(BIT) -- ../../build/bin/bitflip_check $(COEFF)  1
+	export CKKS_CONFIG_PATH=$(CKKS_CONFIG_PATH) && \
+	../pin/pin -t obj-intel64/pintool_BitFlip.so -label addr_file -addr_file target_address.txt -func $(TARGET_FUNC) -instr_index 0 -coeff $(COEFF) -bit $(BIT) -- ../../build/bin/bitflip $(COEFF)  1
+
+build-pin-check: obj-intel64/pintool_BitFlip_checkpoint.so
+	$(MAKE) obj-intel64/pintool_BitFlip_checkpoint.so TARGET=intel64
+
+run-pin-check: build-pin-check
+	export CKKS_CONFIG_PATH=$(CKKS_CONFIG_PATH) && \
+	../pin/pin -t obj-intel64/pintool_BitFlip_checkpoint.so -addr_file target_address.txt -max_coeff 8  -- ../../build/bin/bitflip_check $(COEFF)  1
+
 
 ##############################################################
 #
