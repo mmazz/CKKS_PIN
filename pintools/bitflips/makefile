@@ -9,7 +9,8 @@
 #
 ##############################################################
 
-TARGET_FUNC=_ZN8lbcrypto17CryptoContextImplINS_12DCRTPolyImplIN9bigintdyn9mubintvecINS2_5ubintImEEEEEEE7DecryptERKSt10shared_ptrIKNS_14CiphertextImplIS7_EEES9_INS_14PrivateKeyImplIS7_EEEPS9_INS_13PlaintextImplEE
+#TARGET_FUNC=_ZN8lbcrypto17CryptoContextImplINS_12DCRTPolyImplIN9bigintdyn9mubintvecINS2_5ubintImEEEEEEE7DecryptERKSt10shared_ptrIKNS_14CiphertextImplIS7_EEES9_INS_14PrivateKeyImplIS7_EEEPS9_INS_13PlaintextImplEE
+TARGET_FUNC=_Z8testVoidv
 COEFF=1
 BIT=1
 CKKS_CONFIG_PATH := $(HOME)/CKKS_PIN
@@ -34,7 +35,8 @@ build-pin-check: obj-intel64/pintool_BitFlip_checkpoint.so
 
 run-pin-check: build-pin-check
 	export CKKS_CONFIG_PATH=$(CKKS_CONFIG_PATH) && \
-	../pin/pin -t obj-intel64/pintool_BitFlip_checkpoint.so -addr_file target_address.txt -max_coeff 8  -- ../../build/bin/bitflip_check $(COEFF)  1
+	../pin/pin -t obj-intel64/pintool_BitFlip_checkpoint.so -addr_file target_address.txt -max_coeff 8  -func $(TARGET_FUNC) -instr_index 0 -- ../../build/bin/bitflip_check $(COEFF)  1
+
 
 
 ##############################################################

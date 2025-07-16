@@ -16,7 +16,7 @@ using namespace lbcrypto;
 using Integer  = intnat::NativeIntegerT<long unsigned int>;
 
 
-
+void testVoid();
 std::unordered_map<std::string, std::string> loadConfig(const std::string& filename);
 std::vector<double> uniform_dist(uint32_t batchSize, uint64_t  logMin, uint64_t logMax, int seed, bool verbose=false);
 

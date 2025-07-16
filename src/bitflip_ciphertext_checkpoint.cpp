@@ -11,7 +11,6 @@ asm(
     "    nop                 \n"
     "    ret                 \n"
 );
-
 int main(int argc, char* argv[]) {
     if (argc < 3) {
         std::cerr << "Need number of seeds and number seeds input \n";
@@ -96,14 +95,23 @@ int main(int argc, char* argv[]) {
         addr_file();
         for (int coeff = 0; coeff < ringDim; ++coeff) {
             for (int bit = 0; bit < 64; ++bit) {
-                volatile int sync = getpid();
+                auto val = c->GetElements()[0].GetAllElements()[0][coeff];
+                uint64_t intVal = val.ConvertToInt();  // puede lanzar si overflowea
+                std::cout << "Hex value: 0x" << std::hex << intVal << std::dec << std::endl;
+                std::cout << "A" << std::endl << std::flush;
+                testVoid();
+                std::cout << "B" << std::endl << std::flush;
+                auto val2 = c->GetElements()[0].GetAllElements()[0][coeff];
+                uint64_t intVal2 = val.ConvertToInt();  // puede lanzar si overflowea
+                std::cout << "Hex value: 0x" << std::hex << intVal << std::dec << std::endl;
                 cc->Decrypt(keys.secretKey, c, &result_bitFlip);
                 result_bitFlip->SetLength(batchSize);
                 std::vector<double> result_bitFlip_vec = result_bitFlip->GetRealPackedValue();
 
-                norm2_abs = norm2(golden_result_vec, result_bitFlip_vec,batchSize);
+                norm2_abs = norm2(golden_result_vec, result_bitFlip_vec, batchSize);
                 norms2.append(std::to_string(norm2_abs)+ ", ");
                 std::cout << "Norm2: " << norm2_abs << std::endl;
+                volatile int sync = getpid();
             }
         }
         std::ofstream norm2File(dir_log+"log_norm2/out_norm2"+endFile);

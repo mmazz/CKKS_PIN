@@ -1,4 +1,7 @@
 #include "utils.h"
+
+void testVoid(){
+}
 double norm2(std::vector<double>  &vecInput, std::vector<double> &vecOutput, size_t size){
     double res = 0;
     double diff = 0;
