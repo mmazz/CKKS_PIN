@@ -11,8 +11,8 @@
 
 #TARGET_FUNC=_ZN8lbcrypto17CryptoContextImplINS_12DCRTPolyImplIN9bigintdyn9mubintvecINS2_5ubintImEEEEEEE7DecryptERKSt10shared_ptrIKNS_14CiphertextImplIS7_EEES9_INS_14PrivateKeyImplIS7_EEEPS9_INS_13PlaintextImplEE
 TARGET_FUNC=_Z8testVoidv
-COEFF=1
-BIT=1
+COEFF=0
+BIT=0
 CKKS_CONFIG_PATH := $(HOME)/CKKS_PIN
 .PHONY: run-pin build-pin
 PIN_ROOT = ../pin/
@@ -28,7 +28,7 @@ build-pin: obj-intel64/pintool_BitFlip.so
 
 run-pin: build-pin
 	export CKKS_CONFIG_PATH=$(CKKS_CONFIG_PATH) && \
-	../pin/pin -t obj-intel64/pintool_BitFlip.so -label addr_file -addr_file target_address.txt -func $(TARGET_FUNC) -instr_index 0 -coeff $(COEFF) -bit $(BIT) -- ../../build/bin/bitflip $(COEFF)  1
+	../pin/pin -t obj-intel64/pintool_BitFlip.so -label addr_file -addr_file target_address.txt -func $(TARGET_FUNC) -instr_index 0 -coeff $(COEFF) -bit $(BIT) -- ../../build/bin/bitflip
 
 build-pin-check: obj-intel64/pintool_BitFlip_checkpoint.so
 	$(MAKE) obj-intel64/pintool_BitFlip_checkpoint.so TARGET=intel64

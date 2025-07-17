@@ -10,6 +10,10 @@ make -j16
 sudo make install
 '''
 
+# dependancys
+
+-wget
+-unzip
 
 # PIN
 

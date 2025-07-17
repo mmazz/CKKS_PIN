@@ -13,39 +13,16 @@ asm(
 );
 
 int main(int argc, char* argv[]) {
-    if (argc < 3) {
-        std::cerr << "Need number of seeds and number seeds input \n";
-        return 1;
-    }
-  //  int seed = std::stoi(argv[1]);
-    int coeff = std::stoi(argv[1]);
-    int seed_input = std::stoi(argv[2]);
     const char* home = getenv("HOME");
-    auto config = loadConfig(std::string(home)+"/CKKS_PIN/config.txt");
-
-    uint32_t RNS_size   = std::stoul(config["RNS_limbs"]);
-    bool withNTT         = std::stoi(config["withNTT"]);
-    uint32_t firstMod    = std::stoul(config["firstMod"]);
-    uint32_t scaleMod    = std::stoul(config["scaleMod"]);
-    uint32_t logN = std::stoul(config["logN"]);
+    uint32_t firstMod    = 60;
+    uint32_t scaleMod    = 50;
+    uint32_t logN = 3;
     uint32_t ringDim     = 1 << logN;
-    uint32_t gap         = std::stoul(config["gap"]);
-    int logMin           = std::stoi(config["logMin"]);
-    int logMax           = std::stoi(config["logMax"]);
 
-    std::string prelog = "logs/";
-    std::string info = "log_"+std::to_string(RNS_size) + "_" + std::to_string(withNTT)+"_" + std::to_string(logN) + "_" + std::to_string(firstMod) + "_" +
-                                        std::to_string(scaleMod) + "_" + std::to_string(gap) +"_" + std::to_string(logMin) + "_" + std::to_string(logMax) +"/";
-
-    std::string dir_log = prelog + info;
-  //  std::string endFile = "_" + std::to_string(seed) + "_" + std::to_string(seed_input) + ".txt";
-
-  //  std::ofstream norm2File(dir_log+"log_norm2/out_norm2"+endFile);
-    uint32_t multDepth = RNS_size;
+    uint32_t multDepth = 0;
 
     uint32_t batchSize = ringDim >> 1;
-    if(gap>0)
-        batchSize = batchSize >> gap;
+
     ScalingTechnique rescaleTech = FIXEDMANUAL;
     CCParams<CryptoContextCKKSRNS> parameters;
     parameters.SetMultiplicativeDepth(multDepth);
@@ -61,45 +38,65 @@ int main(int argc, char* argv[]) {
 
     auto keys = cc->KeyGen();
 
-    std::vector<double> input = uniform_dist(batchSize, logMin, logMax, seed_input, false);
+    std::vector<double> input = uniform_dist(batchSize, 0, 8, 0, false);
 
     Plaintext ptxt1 = cc->MakeCKKSPackedPlaintext(input);
+    lbcrypto::PseudoRandomNumberGenerator::SetPRNGSeed(0);
     auto c_original = cc->Encrypt(keys.publicKey, ptxt1);
+    lbcrypto::PseudoRandomNumberGenerator::SetPRNGSeed(0);
     auto c = cc->Encrypt(keys.publicKey, ptxt1);
+    c->GetElements()[0].SwitchFormat();
+    c->GetElements()[0].SwitchFormat();
 
+    int count =0;
+    auto c_vals = c->GetElements()[0].GetAllElements();
+    auto c_original_vals = c_original->GetElements()[0].GetAllElements();
+    for (int i=0; i<ringDim; ++i){
+        if(c_vals[0][i]!= c_original_vals[0][i])
+            ++count;
+    }
+    std::cout << "Initial Differences == " << count << std::endl;
     Plaintext golden_result;
     cc->Decrypt(keys.secretKey, c, &golden_result);
     golden_result->SetLength(batchSize);
     std::vector<double> golden_result_vec = golden_result->GetRealPackedValue();
     double golden_norm2 = norm2(input, golden_result_vec, batchSize);
 
-    if (golden_norm2 < 0.1)
+    if (golden_norm2 < 0.1 && count==0)
     {
         Plaintext result_bitFlip;
         double norm2_abs = 0;
         std::string norms2;
-        c = cc->Encrypt(keys.publicKey, ptxt1);
         auto raw_ctxt = c.get();
-
-        auto& c_ptr = raw_ctxt->GetElements()[0].GetAllElements()[0][0];
-        auto c_val = c->GetElements()[0].GetAllElements()[0][coeff];
+        auto& c_ptr = raw_ctxt->GetElements()[0];
+        auto& c_elem_ptr = raw_ctxt->GetElements()[0].GetAllElements()[0][0];
 
         std::ofstream ofs(std::string(home) + "/CKKS_PIN/pintools/bitflips/target_address.txt");
-        ofs << std::hex << reinterpret_cast<uintptr_t>(&c_ptr);
+        ofs << std::hex << reinterpret_cast<uintptr_t>(&c_ptr)<< "\n";
+        ofs << std::hex << reinterpret_cast<uintptr_t>(&c_elem_ptr)<< "\n";
         ofs.close();
         addr_file();
-
-        std::cout << "Address of target: 0x" << std::hex << &c_ptr << std::dec << std::endl;
+        std::cout << "A" << std::dec << std::endl;
+        testVoid();
+        std::cout << "B" << std::dec << std::endl;
         cc->Decrypt(keys.secretKey, c, &result_bitFlip);
         result_bitFlip->SetLength(batchSize);
         std::vector<double> result_bitFlip_vec = result_bitFlip->GetRealPackedValue();
 
+        for (int i=0; i<batchSize; ++i){
+            std::cout <<  golden_result_vec[i] << " ? " << result_bitFlip_vec[i] << std::endl;
+        }
         norm2_abs = norm2(golden_result_vec, result_bitFlip_vec,batchSize);
-        norms2.append(std::to_string(norm2_abs)+ ", ");
         std::cout << "Norm2: " << norm2_abs << std::endl;
-   //     if (norm2File.is_open())
-   //         norm2File << norms2;
-        std::cout << "Variable test was "<< c_val  <<", now: " << c->GetElements()[0].GetAllElements()[0][coeff]<< std::endl;
+        std::cout << "Variable test was "<< c_original->GetElements()[0].GetAllElements()[0][0]  <<", now: " << c->GetElements()[0].GetAllElements()[0][0]<< std::endl;
+        count = 0;
+        c_vals = c->GetElements()[0].GetAllElements();
+        c_original_vals = c_original->GetElements()[0].GetAllElements();
+        for (int i=0; i<ringDim; ++i){
+            if(c_vals[0][i]!= c_original_vals[0][i])
+                ++count;
+        }
+        std::cout << "Differences == " << count << std::endl;
     }
     else
         std::cout << "ERROR!!! Norm2: " << golden_norm2 << "  Input/output: " << input << " " << golden_result  << std::endl;
