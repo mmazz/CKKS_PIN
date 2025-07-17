@@ -46,8 +46,25 @@ int main(int argc, char* argv[]) {
     lbcrypto::PseudoRandomNumberGenerator::SetPRNGSeed(0);
     auto c = cc->Encrypt(keys.publicKey, ptxt1);
     c->GetElements()[0].SwitchFormat();
-    c->GetElements()[0].SwitchFormat();
+    auto raw_ctxt = c.get();
+    auto& before_elem = raw_ctxt->GetElements()[0]
+                                     ;
+    std::cout << "Dirección antes de NTT: 0x"
+              << std::hex << std::setw(sizeof(uintptr_t)*2)
+              << std::setfill('0')
+              << reinterpret_cast<uintptr_t>(&before_elem)
+              << std::dec << "\n";
 
+        std::cout << "Before bitflip: " << c->GetElements()[0].GetAllElements()[0][0] << std::endl;
+    c->GetElements()[0].SwitchFormat();
+    raw_ctxt = c.get();
+    auto& after_elem = raw_ctxt->GetElements()[0]
+                                     ;
+    std::cout << "Dirección antes de NTT: 0x"
+              << std::hex << std::setw(sizeof(uintptr_t)*2)
+              << std::setfill('0')
+              << reinterpret_cast<uintptr_t>(&after_elem)
+              << std::dec << "\n";
     int count =0;
     auto c_vals = c->GetElements()[0].GetAllElements();
     auto c_original_vals = c_original->GetElements()[0].GetAllElements();
@@ -68,16 +85,17 @@ int main(int argc, char* argv[]) {
         double norm2_abs = 0;
         std::string norms2;
         auto raw_ctxt = c.get();
-        auto& c_ptr = raw_ctxt->GetElements()[0];
         auto& c_elem_ptr = raw_ctxt->GetElements()[0].GetAllElements()[0][0];
 
         std::ofstream ofs(std::string(home) + "/CKKS_PIN/pintools/bitflips/target_address.txt");
-        ofs << std::hex << reinterpret_cast<uintptr_t>(&c_ptr)<< "\n";
+        ofs << std::hex << reinterpret_cast<uintptr_t>(&(raw_ctxt->GetElements()[0]))<< "\n";
         ofs << std::hex << reinterpret_cast<uintptr_t>(&c_elem_ptr)<< "\n";
         ofs.close();
         addr_file();
         std::cout << "A" << std::dec << std::endl;
         testVoid();
+
+        std::cout << "After bitflip: " << c->GetElements()[0].GetAllElements()[0][0] << std::endl;
         std::cout << "B" << std::dec << std::endl;
         cc->Decrypt(keys.secretKey, c, &result_bitFlip);
         result_bitFlip->SetLength(batchSize);

@@ -11,6 +11,7 @@
 
 #TARGET_FUNC=_ZN8lbcrypto17CryptoContextImplINS_12DCRTPolyImplIN9bigintdyn9mubintvecINS2_5ubintImEEEEEEE7DecryptERKSt10shared_ptrIKNS_14CiphertextImplIS7_EEES9_INS_14PrivateKeyImplIS7_EEEPS9_INS_13PlaintextImplEE
 TARGET_FUNC=_Z8testVoidv
+NTT_FUNC=_ZN8lbcrypto7Field2n12SwitchFormatEv
 COEFF=0
 BIT=0
 CKKS_CONFIG_PATH := $(HOME)/CKKS_PIN
@@ -21,6 +22,13 @@ CONFIG_ROOT := $(PIN_ROOT)/source/tools/Config
 include $(CONFIG_ROOT)/makefile.config
 include makefile.rules
 include $(TOOLS_ROOT)/Config/makefile.default.rules
+
+build: obj-intel64/pintool_BitFlip_NTT.so
+	$(MAKE) obj-intel64/pintool_BitFlip.so TARGET=intel64
+
+run: build-pin
+	export CKKS_CONFIG_PATH=$(CKKS_CONFIG_PATH) && \
+	../pin/pin -t obj-intel64/pintool_BitFlip_NTT.so -label addr_file -addr_file target_address.txt -func $(TARGET_FUNC)  -format_func $(NTT_FUNC) -instr_index 0 -coeff $(COEFF) -bit $(BIT) -- ../../build/bin/bitflip
 
 
 build-pin: obj-intel64/pintool_BitFlip.so
