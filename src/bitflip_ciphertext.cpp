@@ -1,13 +1,13 @@
 #include "openfhe.h"
 #include "utils.h"
 
-// 1) En un encabezado común (o justo encima de tu uso):
-extern "C" void addr_file();
+
+extern "C" void addr_label();
 // Aquí defines el símbolo vacío que PIN instrumentará.
 asm(
-    ".global addr_file       \n"
-    ".type   addr_file, @function \n"
-    "addr_file:              \n"
+    ".global addr_label       \n"
+    ".type   addr_label, @function \n"
+    "addr_label:              \n"
     "    nop                 \n"
     "    ret                 \n"
 );
@@ -45,10 +45,11 @@ int main(int argc, char* argv[]) {
     auto c_original = cc->Encrypt(keys.publicKey, ptxt1);
     lbcrypto::PseudoRandomNumberGenerator::SetPRNGSeed(0);
     auto c = cc->Encrypt(keys.publicKey, ptxt1);
+
+
     c->GetElements()[0].SwitchFormat();
     auto raw_ctxt = c.get();
-    auto& before_elem = raw_ctxt->GetElements()[0]
-                                     ;
+    auto& before_elem = raw_ctxt->GetElements()[0];
     std::cout << "Dirección antes de NTT: 0x"
               << std::hex << std::setw(sizeof(uintptr_t)*2)
               << std::setfill('0')
@@ -56,6 +57,7 @@ int main(int argc, char* argv[]) {
               << std::dec << "\n";
 
         std::cout << "Before bitflip: " << c->GetElements()[0].GetAllElements()[0][0] << std::endl;
+
     c->GetElements()[0].SwitchFormat();
     raw_ctxt = c.get();
     auto& after_elem = raw_ctxt->GetElements()[0]
@@ -65,6 +67,8 @@ int main(int argc, char* argv[]) {
               << std::setfill('0')
               << reinterpret_cast<uintptr_t>(&after_elem)
               << std::dec << "\n";
+
+
     int count =0;
     auto c_vals = c->GetElements()[0].GetAllElements();
     auto c_original_vals = c_original->GetElements()[0].GetAllElements();
@@ -91,7 +95,7 @@ int main(int argc, char* argv[]) {
         ofs << std::hex << reinterpret_cast<uintptr_t>(&(raw_ctxt->GetElements()[0]))<< "\n";
         ofs << std::hex << reinterpret_cast<uintptr_t>(&c_elem_ptr)<< "\n";
         ofs.close();
-        addr_file();
+        addr_label();
         std::cout << "A" << std::dec << std::endl;
         testVoid();
 

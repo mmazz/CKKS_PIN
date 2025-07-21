@@ -11,9 +11,10 @@
 
 #TARGET_FUNC=_ZN8lbcrypto17CryptoContextImplINS_12DCRTPolyImplIN9bigintdyn9mubintvecINS2_5ubintImEEEEEEE7DecryptERKSt10shared_ptrIKNS_14CiphertextImplIS7_EEES9_INS_14PrivateKeyImplIS7_EEEPS9_INS_13PlaintextImplEE
 TARGET_FUNC=_Z8testVoidv
-NTT_FUNC=_ZN8lbcrypto7Field2n12SwitchFormatEv
+NTT_FUNC=_ZN8lbcrypto12DCRTPolyImplIN9bigintdyn9mubintvecINS1_5ubintImEEEEE12SwitchFormatEv
 COEFF=0
-BIT=0
+NUM_COEFF=8
+BIT=50
 CKKS_CONFIG_PATH := $(HOME)/CKKS_PIN
 .PHONY: run-pin build-pin
 PIN_ROOT = ../pin/
@@ -28,7 +29,7 @@ build: obj-intel64/pintool_BitFlip_NTT.so
 
 run: build-pin
 	export CKKS_CONFIG_PATH=$(CKKS_CONFIG_PATH) && \
-	../pin/pin -t obj-intel64/pintool_BitFlip_NTT.so -label addr_file -addr_file target_address.txt -func $(TARGET_FUNC)  -format_func $(NTT_FUNC) -instr_index 0 -coeff $(COEFF) -bit $(BIT) -- ../../build/bin/bitflip
+	../pin/pin -t obj-intel64/pintool_BitFlip_NTT.so -label addr_label -addr_file target_address.txt -func $(TARGET_FUNC)  -format_func $(NTT_FUNC) -instr_index 0 -coeff $(COEFF) -bit $(BIT) -- ../../build/bin/bitflip
 
 
 build-pin: obj-intel64/pintool_BitFlip.so
@@ -36,15 +37,17 @@ build-pin: obj-intel64/pintool_BitFlip.so
 
 run-pin: build-pin
 	export CKKS_CONFIG_PATH=$(CKKS_CONFIG_PATH) && \
-	../pin/pin -t obj-intel64/pintool_BitFlip.so -label addr_file -addr_file target_address.txt -func $(TARGET_FUNC) -instr_index 0 -coeff $(COEFF) -bit $(BIT) -- ../../build/bin/bitflip
+	../pin/pin -t obj-intel64/pintool_BitFlip.so -label addr_file -addr_label target_address.txt -func $(TARGET_FUNC) -instr_index 0 -coeff $(COEFF) -bit $(BIT) -- ../../build/bin/bitflip
 
 build-pin-check: obj-intel64/pintool_BitFlip_checkpoint.so
 	$(MAKE) obj-intel64/pintool_BitFlip_checkpoint.so TARGET=intel64
 
 run-pin-check: build-pin-check
 	export CKKS_CONFIG_PATH=$(CKKS_CONFIG_PATH) && \
-	../pin/pin -t obj-intel64/pintool_BitFlip_checkpoint.so -addr_file target_address.txt -max_coeff 8  -func $(TARGET_FUNC) -instr_index 0 -- ../../build/bin/bitflip_check $(COEFF)  1
-
+	../pin/pin -t obj-intel64/pintool_BitFlip_checkpoint.so -label addr_label   \
+				-addr_file target_address.txt -func $(TARGET_FUNC) -format_func $(NTT_FUNC) \
+				-instr_index 0 -num_coeffs $(NUM_COEFF) -enable_effect 1 -verbose 1 \
+				-- ../../build/bin/bitflip_check 1 1
 
 
 ##############################################################

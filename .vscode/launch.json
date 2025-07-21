@@ -5,7 +5,7 @@
    		 "name": "Mati-Debugger",
    		 "type": "cppdbg",
    		 "request": "launch",
-   		 "program": "${workspaceFolder}/bin/test",
+   		 "program": "${workspaceFolder}/build/bin/bitflip",
    		 "args": ["1", "1"],
    		 "stopAtEntry": false,
          "cwd": "${workspaceFolder}",
