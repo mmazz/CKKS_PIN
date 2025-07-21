@@ -47,7 +47,7 @@ run-pin-check: build-pin-check
 	../pin/pin -t obj-intel64/pintool_BitFlip_checkpoint.so -label addr_label   \
 				-addr_file target_address.txt -func $(TARGET_FUNC) -format_func $(NTT_FUNC) \
 				-instr_index 0 -num_coeffs $(NUM_COEFF) -enable_effect 1 -verbose 1 \
-				-- ../../build/bin/bitflip_check 1 1
+				-full_restore 0 -- ../../build/bin/bitflip_check 1 1
 
 
 ##############################################################

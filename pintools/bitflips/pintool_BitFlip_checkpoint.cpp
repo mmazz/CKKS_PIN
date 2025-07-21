@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <iostream>
 #include <vector>
+#include <bitset>
 
 // ------------------------------------------------------------------------------------------------
 // Knobs
@@ -40,6 +41,10 @@ static KNOB<BOOL> KnobVerbose(
     KNOB_MODE_WRITEONCE, "pintool", "verbose", "1",
     "Habilitar logs de depuración");
 
+static KNOB<BOOL> KnobFullRestore(
+    KNOB_MODE_WRITEONCE, "pintool", "full_restore", "0",
+    "Restaurar todos los coeficientes (1) o solo los modificados (0)");
+
 // ------------------------------------------------------------------------------------------------
 // Types & Globals
 // ------------------------------------------------------------------------------------------------
@@ -52,12 +57,21 @@ static bool    addressRead   = false;
 static UINT32  curCoeff      = 0;
 static UINT32  curBit        = 0;
 static bool    flipPending   = false;
-static bool    flipApplied   = false;  // NUEVO: track si ya aplicamos el flip
+static bool    flipApplied   = false;
 static std::vector<UINT64> origCoeffs;
 
-// Macro de logging
+// Performance optimizations
+static std::bitset<8192> modifiedCoeffs; // Track which coeffs were modified (max 8192)
+static UINT64* coeffArray = nullptr;      // Direct pointer to coefficient array
+static bool formatFuncAffectsAll = true; // Assume format affects all until we know better
+
+// Logging optimizado
 #define VLOG(msg) \
     do { if (KnobVerbose) std::cerr << msg << std::endl; } while (0)
+
+// Logging ligero para operaciones frecuentes
+#define VLOG_LIGHT(msg) \
+    do { if (KnobVerbose.Value() ) std::cerr << msg << std::endl; } while (0)
 
 // ------------------------------------------------------------------------------------------------
 // Helpers
@@ -82,164 +96,140 @@ bool ReadAddresses() {
     }
     objectAddr = (ADDRINT)obj;
     baseAddr   = (ADDRINT)base;
+    coeffArray = reinterpret_cast<UINT64*>(baseAddr); // Cache direct pointer
     VLOG("[DBG] objectAddr=0x" << std::hex << objectAddr
          << ", baseAddr=0x" << baseAddr << std::dec);
     return true;
 }
 
+// Optimized restore: only restore what was actually modified
+inline void FastRestore() {
+    if (KnobFullRestore.Value()) {
+        // Full restore mode (slower but safer)
+        for (UINT32 i = 0; i < KnobNumCoeffs; ++i) {
+            coeffArray[i] = origCoeffs[i];
+        }
+        VLOG_LIGHT("[DBG] Full restore completed");
+    } else {
+        // Smart restore: only restore modified coefficients
+        for (UINT32 i = 0; i < KnobNumCoeffs && i < modifiedCoeffs.size(); ++i) {
+            if (modifiedCoeffs[i]) {
+                coeffArray[i] = origCoeffs[i];
+                modifiedCoeffs[i] = false;
+                VLOG_LIGHT("[DBG] Restored coeff[" << i << "]");
+            }
+        }
+    }
+}
+
+// Batch verification (only when verbose > 1)
+inline void VerifyCleanState() {
+    if (!KnobVerbose.Value()  ) return;
+
+    bool allClean = true;
+    for (UINT32 i = 0; i < KnobNumCoeffs; ++i) {
+        if (coeffArray[i] != origCoeffs[i]) {
+            VLOG("[ERROR] Coeff[" << i << "] = 0x" << std::hex << coeffArray[i]
+                 << " != original 0x" << origCoeffs[i] << std::dec);
+            allClean = false;
+        }
+    }
+    if (allClean) {
+        VLOG_LIGHT("[DBG] All coefficients verified clean");
+    }
+}
+
 // ------------------------------------------------------------------------------------------------
 // Callbacks
 // ------------------------------------------------------------------------------------------------
-VOID CallFormat() {
-    VLOG("[DBG] CallFormat called");
+inline void CallFormat() {
+    VLOG_LIGHT("[DBG] CallFormat");
     if (fmt && KnobEnableEffect) {
         fmt((void*)objectAddr);
-        VLOG("[DBG]   format function executed");
+
+        // Mark potentially affected coefficients
+        if (formatFuncAffectsAll) {
+            // Conservative: assume all coefficients might be affected
+            for (UINT32 i = 0; i < KnobNumCoeffs && i < modifiedCoeffs.size(); ++i) {
+                modifiedCoeffs[i] = true;
+            }
+        } else {
+            // If we know format only affects specific coeffs, mark only those
+            // This would need profiling to determine
+            modifiedCoeffs[curCoeff] = true;
+        }
     }
 }
 
 VOID DoBitFlip() {
-    VLOG("[DBG] DoBitFlip - curCoeff=" << curCoeff << " curBit=" << curBit
-         << " flipPending=" << flipPending << " flipApplied=" << flipApplied);
-
-    if (!addressRead) {
-        VLOG("[DBG] No address read yet");
+    // Early returns for performance
+    if (!addressRead || !flipPending || flipApplied || curCoeff >= KnobNumCoeffs) {
         return;
     }
 
-    if (!flipPending) {
-        VLOG("[DBG] No flip pending");
-        return;
+    VLOG_LIGHT("[DBG] DoBitFlip coeff=" << curCoeff << " bit=" << curBit);
+
+    // PASO 1: Ensure target coefficient is clean (minimal verification)
+    if (coeffArray[curCoeff] != origCoeffs[curCoeff]) {
+        coeffArray[curCoeff] = origCoeffs[curCoeff];
+        VLOG_LIGHT("[DBG] Restored target coeff to clean value");
     }
 
-    if (flipApplied) {
-        VLOG("[DBG] Flip already applied this iteration");
-        return;
-    }
-
-    if (curCoeff >= KnobNumCoeffs) {
-        VLOG("[DBG] No more coefficients to process");
-        return;
-    }
-
-    // PASO 0: VERIFICAR que todos los coeficientes estén limpios antes del flip
-    VLOG("[DBG] === Pre-flip verification: ensuring all coefficients are clean ===");
-    for (UINT32 i = 0; i < KnobNumCoeffs && i < origCoeffs.size(); ++i) {
-        UINT64* ptr = reinterpret_cast<UINT64*>(baseAddr + i * sizeof(UINT64));
-        if (*ptr != origCoeffs[i]) {
-            VLOG("[WARN] Coeff[" << i << "] = 0x" << std::hex << *ptr
-                 << " != original 0x" << origCoeffs[i] << ", restoring..." << std::dec);
-            *ptr = origCoeffs[i];
-        }
-    }
-
-    UINT64* targetPtr = reinterpret_cast<UINT64*>(baseAddr + curCoeff * sizeof(UINT64));
-
-    // Verificar que tenemos el valor original guardado
-    if (curCoeff >= origCoeffs.size()) {
-        VLOG("[ERROR] curCoeff out of bounds for origCoeffs");
-        return;
-    }
-
-    // PASO 1: Asegurar que el coeficiente objetivo tiene el valor limpio
-    *targetPtr = origCoeffs[curCoeff];
-    VLOG("[DBG] Ensured target coeff[" << curCoeff << "] has clean value: 0x"
-         << std::hex << *targetPtr << std::dec);
-
-    // PASO 2: Aplicar format_func BEFORE (si está habilitado)
+    // PASO 2: Format BEFORE
     if (KnobEnableEffect && fmt) {
         CallFormat();
-        VLOG("[DBG] Applied format BEFORE flip");
     }
 
-    // PASO 3: Aplicar bitflip
-    UINT64 mask = (1ULL << curBit);
+    // PASO 3: Apply bitflip
     if (KnobEnableEffect) {
-        UINT64 beforeFlip = *targetPtr;
-        *targetPtr ^= mask;
-        VLOG("[DBG] Applied bitflip - mask=0x" << std::hex << mask
-             << " before=0x" << beforeFlip << " after=0x" << *targetPtr << std::dec);
+        UINT64 mask = (1ULL << curBit);
+        coeffArray[curCoeff] ^= mask;
+        modifiedCoeffs[curCoeff] = true; // Mark as modified
+
+        VLOG_LIGHT("[DBG] Flipped bit " << curBit << " of coeff " << curCoeff);
     }
 
-    // PASO 4: Aplicar format_func AFTER (si está habilitado)
+    // PASO 4: Format AFTER
     if (KnobEnableEffect && fmt) {
         CallFormat();
-        VLOG("[DBG] Applied format AFTER flip");
     }
 
     flipApplied = true;
-    VLOG("[DBG] Bitflip sequence completed for coeff=" << curCoeff << " bit=" << curBit);
-
-    // PASO 5: Mostrar estado final después del flip
-    VLOG("[DBG] === Post-flip state ===");
-    for (UINT32 i = 0; i < std::min((UINT32)8, KnobNumCoeffs.Value()) && i < origCoeffs.size(); ++i) {
-        UINT64* ptr = reinterpret_cast<UINT64*>(baseAddr + i * sizeof(UINT64));
-        VLOG("[DBG] Coeff[" << i << "] = 0x" << std::hex << *ptr
-             << (i == curCoeff ? " <-- MODIFIED" : "") << std::dec);
-    }
 }
 
 VOID RestoreAndAdvance() {
-    VLOG("[DBG] RestoreAndAdvance - curCoeff=" << curCoeff << " curBit=" << curBit);
+    if (!addressRead) return;
 
-    if (!addressRead) {
-        VLOG("[DBG] No addresses read yet");
-        return;
-    }
+    VLOG_LIGHT("[DBG] RestoreAndAdvance coeff=" << curCoeff << " bit=" << curBit);
 
-    // PASO 1: RESTAURAR TODOS los coeficientes a sus valores originales
-    VLOG("[DBG] Restoring ALL coefficients to original values");
-    for (UINT32 i = 0; i < KnobNumCoeffs && i < origCoeffs.size(); ++i) {
-        UINT64* ptr = reinterpret_cast<UINT64*>(baseAddr + i * sizeof(UINT64));
-        UINT64 currentValue = *ptr;
-        *ptr = origCoeffs[i];
+    // PASO 1: Optimized restore
+    FastRestore();
 
-        if (currentValue != origCoeffs[i]) {
-            VLOG("[DBG]   Restored coeff[" << i << "] from 0x" << std::hex << currentValue
-                 << " to 0x" << origCoeffs[i] << std::dec);
-        }
-    }
-
-    // PASO 2: Avanzar al siguiente bit/coeficiente
+    // PASO 2: Advance to next bit/coefficient
     if (curCoeff < KnobNumCoeffs) {
         curBit++;
         if (curBit >= 64) {
             curBit = 0;
             curCoeff++;
-            VLOG("[DBG] Advanced to next coefficient: " << curCoeff);
+            if (curCoeff % 64 == 0) { // Log every 64 coefficients
+                VLOG("[DBG] Advanced to coefficient: " << curCoeff);
+            }
         }
     }
 
-    // PASO 3: Preparar para el siguiente flip
+    // PASO 3: Prepare next flip
     if (curCoeff < KnobNumCoeffs) {
         flipPending = true;
         flipApplied = false;
-        VLOG("[DBG] Next flip prepared: coeff=" << curCoeff << " bit=" << curBit);
     } else {
         flipPending = false;
         flipApplied = false;
         VLOG("[DBG] All coefficients processed");
     }
 
-    // Debug: verificar que todos los coeficientes están limpios
-    VLOG("[DBG] === Verification: All coefficients should match originals ===");
-    bool allClean = true;
-    for (UINT32 i = 0; i < KnobNumCoeffs && i < origCoeffs.size(); ++i) {
-        UINT64* ptr = reinterpret_cast<UINT64*>(baseAddr + i * sizeof(UINT64));
-        UINT64 currentValue = *ptr;
-        if (currentValue != origCoeffs[i]) {
-            VLOG("[ERROR] Coeff[" << i << "] = 0x" << std::hex << currentValue
-                 << " != original 0x" << origCoeffs[i] << std::dec);
-            allClean = false;
-        } else {
-            VLOG("[DBG] Coeff[" << i << "] = 0x" << std::hex << currentValue << " ✓" << std::dec);
-        }
-    }
-
-    if (allClean) {
-        VLOG("[DBG] All coefficients successfully restored to original values");
-    } else {
-        VLOG("[ERROR] Some coefficients were not properly restored!");
+    // Optional verification (only when debugging)
+    if (KnobVerbose.Value()  && (curBit == 0 || curCoeff >= KnobNumCoeffs)) {
+        VerifyCleanState();
     }
 }
 
@@ -247,43 +237,46 @@ VOID RestoreAndAdvance() {
 // Stubs en la app
 // ------------------------------------------------------------------------------------------------
 VOID OnSyncMarker() {
-    VLOG("[DBG] OnSyncMarker called");
     RestoreAndAdvance();
 }
 
 VOID OnLabelHit() {
-    VLOG("[DBG] OnLabelHit - reading addresses and saving original coefficients");
+    VLOG("[DBG] OnLabelHit - initializing fault injection");
 
-    // Leer direcciones si no las hemos leído
+    // Read addresses if not done
     if (!addressRead && ReadAddresses()) {
         addressRead = true;
-        VLOG("[DBG] Addresses successfully read");
     }
 
     if (!addressRead) {
-        VLOG("[ERROR] Failed to read addresses");
+        std::cerr << "[ERROR] Failed to read addresses" << std::endl;
         return;
     }
 
-    // Limpiar y guardar valores originales
+    // Reserve space efficiently
     origCoeffs.clear();
     origCoeffs.reserve(KnobNumCoeffs.Value());
+    modifiedCoeffs.reset(); // Clear all modification flags
 
-    VLOG("[DBG] Saving original coefficients:");
+    // Save original coefficients with minimal logging
     for (UINT32 i = 0; i < KnobNumCoeffs; ++i) {
-        UINT64* ptr = reinterpret_cast<UINT64*>(baseAddr + i * sizeof(UINT64));
-        UINT64 original = *ptr;
-        origCoeffs.push_back(original);
-        VLOG("[DBG]   Orig coeff[" << i << "] = 0x" << std::hex << original << std::dec);
+        origCoeffs.push_back(coeffArray[i]);
     }
 
-    // Inicializar estado para el primer flip
+    if (KnobVerbose) {
+        VLOG("[DBG] Saved " << KnobNumCoeffs.Value() << " original coefficients");
+        if (KnobVerbose.Value()) {
+            for (UINT32 i = 0; i < std::min((UINT32)8, KnobNumCoeffs.Value()); ++i) {
+                VLOG("[DBG]   Orig[" << i << "] = 0x" << std::hex << origCoeffs[i] << std::dec);
+            }
+        }
+    }
+
+    // Initialize state
     curCoeff = 0;
     curBit = 0;
     flipPending = true;
     flipApplied = false;
-
-    VLOG("[DBG] Initialized for fault injection - ready for first flip");
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -302,11 +295,9 @@ VOID ImageCallback(IMG img, VOID*) {
             }
             else if (name == KnobFormatFunc.Value()) {
                 fmt = (FormatFn)RTN_Address(rtn);
-                VLOG("[DBG] Captured format_func at 0x"
-                     << std::hex << RTN_Address(rtn) << std::dec);
+                VLOG("[DBG] Captured format_func at 0x" << std::hex << RTN_Address(rtn) << std::dec);
             }
             else if (name == KnobTargetFunc.Value()) {
-                VLOG("[DBG] Instrumenting target func: " << name);
                 RTN_Open(rtn);
                 UINT32 idx = 0;
                 for (INS ins = RTN_InsHead(rtn); INS_Valid(ins); ins = INS_Next(ins), idx++) {
@@ -330,14 +321,13 @@ VOID ImageCallback(IMG img, VOID*) {
 
 VOID Fini(INT32, VOID*) {
     VLOG("[DBG] === FINAL STATE ===");
-    VLOG("[DBG] Last coefficient processed: " << curCoeff << ", bit: " << curBit);
+    VLOG("[DBG] Processed " << curCoeff << " coefficients, "
+         << (curCoeff * 64 + curBit) << " total bits");
 
-    // Mostrar estado final de todos los coeficientes
-    if (addressRead) {
-        VLOG("[DBG] Final coefficient values:");
-        for (UINT32 i = 0; i < KnobNumCoeffs && i < origCoeffs.size(); ++i) {
-            UINT64* ptr = reinterpret_cast<UINT64*>(baseAddr + i * sizeof(UINT64));
-            VLOG("[DBG]   Final coeff[" << i << "] = 0x" << std::hex << *ptr
+    if (addressRead && KnobVerbose.Value() ) {
+        VLOG("[DBG] Final verification of first 8 coefficients:");
+        for (UINT32 i = 0; i < std::min((UINT32)8, KnobNumCoeffs.Value()); ++i) {
+            VLOG("[DBG]   Coeff[" << i << "] = 0x" << std::hex << coeffArray[i]
                  << " (orig: 0x" << origCoeffs[i] << ")" << std::dec);
         }
     }
