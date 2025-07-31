@@ -146,11 +146,21 @@ VOID Instruction(INS ins, VOID *v) {
 
 // Image instrumentation
 VOID Image(IMG img, VOID *v) {
+    // Debug: Log all images being loaded
+    logfile << "DEBUG: Loading image: " << IMG_Name(img) << endl;
+
     if (target_function.empty()) return;
+
+    bool found_function = false;
 
     for (SEC sec = IMG_SecHead(img); SEC_Valid(sec); sec = SEC_Next(sec)) {
         for (RTN rtn = SEC_RtnHead(sec); RTN_Valid(rtn); rtn = RTN_Next(rtn)) {
             string name = RTN_Name(rtn);
+
+            // Debug: Log some function names to see what's available
+            if (name.find("Encrypt") != string::npos || name.find("encrypt") != string::npos) {
+                logfile << "DEBUG: Found encrypt-related function: " << name << endl;
+            }
 
             if (name == target_function) {
                 RTN_Open(rtn);
@@ -169,10 +179,12 @@ VOID Image(IMG img, VOID *v) {
                 logfile << "INSTRUMENTED: Function " << name
                         << " at 0x" << hex << RTN_Address(rtn) << dec << endl;
 
+                found_function = true;
                 RTN_Close(rtn);
                 break;
             }
         }
+        if (found_function) break;
     }
 }
 
@@ -223,11 +235,15 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
+    // Force immediate write to ensure file is created
     logfile << "CKKS Fault Injection Started" << endl;
     logfile << "Target Function: " << target_function << endl;
     logfile << "Target Arithmetic Operation: " << target_arith_op_number << endl;
     logfile << "Target Bit: " << target_bit << endl;
     logfile << "================================" << endl;
+    logfile.flush();  // Force write to disk
+
+    cerr << "Log file created: " << KnobLogFile.Value() << endl;  // Debug to stderr
 
     // Register callbacks
     IMG_AddInstrumentFunction(Image, 0);
@@ -239,4 +255,3 @@ int main(int argc, char *argv[]) {
 
     return 0;
 }
-
