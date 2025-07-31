@@ -7,8 +7,6 @@ cmake -DCMAKE_PREFIX_PATH=$CURDIR/../openfhe-PRNGControl/install\
       -DCMAKE_BUILD_TYPE=Debug \
       -DCMAKE_CXX_FLAGS="-g -O3 -fno-pie -no-pie" ../src
 make -j16
-sudo make install
-'''
 
 # dependancys
 
@@ -50,4 +48,8 @@ can do:
 '''
 nm -C ./test | grep 'Encrypt(' | grep 'PrivateKey'
 '''
+
+## Idea de experimento:
+
+Cambio un poco la cosa, vamos a atacar las intrucciones aritmeticas de
 
