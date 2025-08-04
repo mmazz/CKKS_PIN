@@ -1,20 +1,16 @@
 #include "openfhe.h"
 #include "utils.h"
-extern "C" void start_measurement();
-extern "C" void end_measurement();
 
-asm(
-    ".global start_measurement       \n"
-    ".type   start_measurement, @function \n"
-    "start_measurement:              \n"
-    "    nop                   \n"
-    "    ret                   \n"
-    ".global end_measurement         \n"
-    ".type   end_measurement, @function \n"
-    "end_measurement:                \n"
-    "    nop                   \n"
-    "    ret                   \n"
-);
+extern "C" void start_measurement() __attribute__((used, noinline));
+extern "C" void end_measurement() __attribute__((used, noinline));
+
+extern "C" void start_measurement() {
+    asm volatile("nop");
+}
+
+extern "C" void end_measurement() {
+    asm volatile("nop");
+}
 int main(int argc, char* argv[]) {
     uint32_t firstMod    = 60;
     uint32_t scaleMod    = 50;
