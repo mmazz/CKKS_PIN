@@ -93,3 +93,10 @@ set_target_properties(bitflip_registers PROPERTIES
 )
 target_link_libraries(bitflip_registers PRIVATE mainlib_common ${OpenFHE_SHARED_LIBRARIES})
 
+add_executable(counter instructionCounter.cpp)
+set_target_properties(counter PROPERTIES
+    BUILD_WITH_INSTALL_RPATH TRUE
+    BUILD_RPATH_USE_ORIGIN TRUE
+)
+target_link_libraries(counter PRIVATE mainlib_common ${OpenFHE_SHARED_LIBRARIES})
+
