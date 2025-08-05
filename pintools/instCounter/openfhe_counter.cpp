@@ -26,7 +26,7 @@ using std::vector;
 // -----------------------------------------------------------------
 static const string START_MARKER = "start_measurement";
 static const string END_MARKER   = "end_measurement";
-static const int CALL_HIERARCHY_DEPTH = 4; // función actual + 3 padres
+static const int CALL_HIERARCHY_DEPTH = 10; // función actual + 3 padres
 
 // -----------------------------------------------------------------
 // Estado global
@@ -135,10 +135,16 @@ struct CounterKey {
     string parent_1;
     string parent_2;
     string parent_3;
+    string parent_4;
+    string parent_5;
+    string parent_6;
+    string parent_7;
+    string parent_8;
+    string parent_9;
 
     bool operator<(const CounterKey& other) const {
-        return tie(instruction_type, current_function, parent_1, parent_2, parent_3) <
-               tie(other.instruction_type, other.current_function, other.parent_1, other.parent_2, other.parent_3);
+        return tie(instruction_type, current_function, parent_1, parent_2, parent_3, parent_4, parent_5, parent_6, parent_7, parent_8, parent_9) <
+               tie(other.instruction_type, other.current_function, other.parent_1, other.parent_2, other.parent_3, other.parent_4, other.parent_5, other.parent_6, other.parent_7, other.parent_8, other.parent_9);
     }
 };
 
@@ -154,6 +160,12 @@ static CounterKey getCallHierarchy(const string& instruction_type) {
     key.parent_1 = "";
     key.parent_2 = "";
     key.parent_3 = "";
+    key.parent_4 = "";
+    key.parent_5 = "";
+    key.parent_6 = "";
+    key.parent_7 = "";
+    key.parent_8 = "";
+    key.parent_9 = "";
 
     if (!call_stack.empty()) {
         vector<string> hierarchy;
@@ -170,6 +182,12 @@ static CounterKey getCallHierarchy(const string& instruction_type) {
         if (hierarchy.size() >= 2) key.parent_1 = hierarchy[1];
         if (hierarchy.size() >= 3) key.parent_2 = hierarchy[2];
         if (hierarchy.size() >= 4) key.parent_3 = hierarchy[3];
+        if (hierarchy.size() >= 5) key.parent_4 = hierarchy[4];
+        if (hierarchy.size() >= 6) key.parent_5 = hierarchy[5];
+        if (hierarchy.size() >= 7) key.parent_6 = hierarchy[6];
+        if (hierarchy.size() >= 8) key.parent_7 = hierarchy[7];
+        if (hierarchy.size() >= 9) key.parent_8 = hierarchy[8];
+        if (hierarchy.size() >= 10) key.parent_9 = hierarchy[9];
     }
 
     return key;
@@ -188,11 +206,31 @@ VOID AnalyzeInstruction(UINT32 instruction_type_val) {
     instruction_counts[key]++;
 }
 
-// Instrumentación de rutinas para tracking de call stack
-VOID OnRoutineEntry(string* function_name) {
-    if (measuring) {
-        call_stack.push(*function_name);
+static const std::vector<std::string> blacklistMang = {
+    "malloc",      // atrapar malloc / calloc / free
+    "calloc",
+    "free",
+    "_ZSt",        // todo lo que empiece con std:: (std:: = St)
+    "_Znwm",       // operador new (unsigned long) → operator new(unsigned long)
+    "_ZdlPv",      // operador delete(void*)
+    "_ZN2bl",      // namespace blake2 (algo como _ZN2blake…)
+    "sodium",      // si usás libsodium
+    // …y agregá más según lo que veas en tus logs con nm o objdump
+};
+
+bool is_blacklisted(const std::string &mangled) {
+    for (auto &pat : blacklistMang) {
+        if (mangled.find(pat) != std::string::npos)
+            return true;
     }
+    return false;
+}
+
+VOID OnRoutineEntry(std::string* name) {
+    const std::string &m = *name;
+    if (!measuring)// || is_blacklisted(m))
+        return;      // no apilarla
+    call_stack.push(m);
 }
 
 VOID OnRoutineExit() {
@@ -201,7 +239,6 @@ VOID OnRoutineExit() {
     }
 }
 
-// Instrumentación de rutinas
 VOID InstrumentRoutine(RTN rtn, VOID* v) {
     string routine_name = RTN_Name(rtn);
 
@@ -226,7 +263,6 @@ VOID InstrumentRoutine(RTN rtn, VOID* v) {
         return;
     }
 
-    // Instrumentar funciones normales para call stack tracking
     RTN_Open(rtn);
 
     string* name_ptr = new string(routine_name);
@@ -238,7 +274,6 @@ VOID InstrumentRoutine(RTN rtn, VOID* v) {
     RTN_Close(rtn);
 }
 
-// Instrumentación de instrucciones
 VOID InstrumentInstruction(INS ins, VOID* v) {
     InstructionType type = classifyInstruction(ins);
     if (type == UNKNOWN_TYPE) return;
@@ -249,24 +284,27 @@ VOID InstrumentInstruction(INS ins, VOID* v) {
                    IARG_UINT32, type_val, IARG_END);
 }
 
-// Función de finalización
 VOID Finish(INT32 code, VOID* v) {
     cout << "[PIN] Escribiendo resultados..." << endl;
 
-    // Escribir header CSV
-    output_file << "Tipo_Instruccion,Funcion_Actual,Funcion_Padre_1,Funcion_Padre_2,Funcion_Padre_3,Conteo\n";
+    output_file << "Tipo_Instruccion,Conteo,Funcion_Actual,Funcion_Padre_1,Funcion_Padre_2,Funcion_Padre_3,Funcion_Padre_4,Funcion_Padre_5,Funcion_Padre_6,Funcion_Padre_7,Funcion_Padre_8,Funcion_Padre_9,\n";
 
-    // Escribir datos
     for (const auto& entry : instruction_counts) {
         const CounterKey& key = entry.first;
         UINT64 count = entry.second;
 
         output_file << key.instruction_type << ","
+                   << count << ","
                    << key.current_function << ","
                    << key.parent_1 << ","
                    << key.parent_2 << ","
                    << key.parent_3 << ","
-                   << count << "\n";
+                   << key.parent_4 << ","
+                   << key.parent_5 << ","
+                   << key.parent_6 << ","
+                   << key.parent_7 << ","
+                   << key.parent_8 << ","
+                   << key.parent_9 << "\n";
     }
 
     output_file.close();
@@ -274,30 +312,25 @@ VOID Finish(INT32 code, VOID* v) {
     cout << "[PIN] Total de entradas únicas: " << instruction_counts.size() << endl;
 }
 
-// Función de uso
 INT32 Usage() {
     cerr << "Uso: pin -t obj-intel64/openfhe_ckks_counter.so -- <programa_openfhe>" << endl;
     cerr << "El programa debe tener funciones start_measurement() y end_measurement()" << endl;
     return -1;
 }
 
-// Función principal
 int main(int argc, char* argv[]) {
-    // Inicializar símbolos para nombres de funciones
     PIN_InitSymbols();
 
     if (PIN_Init(argc, argv)) {
         return Usage();
     }
 
-    // Abrir archivo de salida
     output_file.open("openfhe_ckks_counts.csv");
     if (!output_file.is_open()) {
         cerr << "[PIN] ERROR: No se pudo abrir el archivo CSV de salida" << endl;
         return 1;
     }
 
-    // Registrar funciones de instrumentación
     RTN_AddInstrumentFunction(InstrumentRoutine, nullptr);
     INS_AddInstrumentFunction(InstrumentInstruction, nullptr);
     PIN_AddFiniFunction(Finish, nullptr);
@@ -305,7 +338,6 @@ int main(int argc, char* argv[]) {
     cout << "[PIN] OpenFHE CKKS Instruction Counter iniciado" << endl;
     cout << "[PIN] Esperando marcadores start_measurement/end_measurement..." << endl;
 
-    // Iniciar el programa
     PIN_StartProgram();
 
     return 0;

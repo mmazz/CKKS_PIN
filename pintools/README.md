@@ -89,6 +89,57 @@ que sea, le debemos pasar callbacks. Esto se hace mediante estas funciones:
     - Empieza la ejecución real del programa instrumentado
     - Durante la ejecución: Se ejecutan tus análisis (InsertCallbacks)
     - Al finalizar: Llama a tus FiniFunctions (ej: Finish())
+6. Idea:
+Pin no recorre todo el binario de entrada de una sola vez, sino que lo hace imagen por imagen (IMG) y por demanda, a medida que el binario (y sus librerías) se van cargando.
+Pero dentro de cada imagen, sí, Pin:
+    - Recorre rutina por rutina (RTN)
+    - Dentro de cada rutina, instrucción por instrucción (INS)
+    - Y llama a tus callbacks registrados si corresponde
 
+## Profundizando
+
+Que hace PIN con las rutinas?
+Cuando Pin está cargando el binario y encuentra una rutina (RTN) —es decir, una función definida en el ELF:
+
+    1.Llama a tu InstrumentRoutine(rtn, v)
+
+    2. Vos accedés al nombre: RTN_Name(rtn)
+    Devuelve el nombre mangleado (si es C++ y no usás extern "C"), tal como aparece en los símbolos.
+
+    3. Luego: RTN_Open(rtn)
+    Esto abre la rutina para instrumentarla.
+        - Internamente habilita el acceso a sus instrucciones (INS)
+        - Sin este Open(), no podés recorrer ni modificar la rutina
+
+    4. Insertás hooks:
+       - RTN_InsertCall(... IPOINT_BEFORE ...): se ejecuta antes de entrar a la función
+       - RTN_InsertCall(... IPOINT_AFTER ...): se ejecuta cuando la función retorna
+       - Ojo que IPOINT_AFTER solo funciona en funciones que tienen return explícito. Si la función usa exit() o throw, puede no llamar AFUNPTR.
+
+    5. RTN_Close(rtn)
+        - Finaliza la edición de la rutina.
+        - Internamente aplica los cambios (inserciones de tus hooks)
+        - Te protege contra corrupción de estado si editás múltiples rutinas simultáneamente
+        - Obligatorio: si abriste una rutina con RTN_Open(), tenés que cerrarla
+    6. Cuando registro el callback puedo ademas del nombre del callback pasarle
+       algun parametro generico (void*), en general uso nullptr. Ese paremtro es
+        el que recibe el callback aparte de RTN rtn: que es el objeto que representa la rutina (Pin te lo da).
+
+En instruciones, no hay funciones de open y close ya que son unidades atomicas.
+
+- Extra: Muchas veces podemos usar c11 e insertar una funcion lambda
+directamente.
+Esto seria pasarle a AFUNPTR esto:
++[]() {
+    ...
+}
+1. No toma argumentos: []()
+2. Tiene cuerpo: { measuring = TRUE; ... }
+3. Se convierte en puntero a función con +[] (te explico por qué)
+4. Se pasa como AFUNPTR(...) para insertarla en un InsertCall de Pin
+
+Sobre 3) Este es el truco: el operador + delante de una lambda fuerza la conversión de la lambda a puntero a función tradicional (tipo void (*)()), pero solo si la lambda no captura variables (lo cual es el caso acá porque el capture list está vacío: []).
+
+Sin el +, la lambda es un objeto tipo class (con operator()), y no sería convertible directamente a AFUNPTR, que espera un void (*)().
 ## Problemas de simbolos
 
