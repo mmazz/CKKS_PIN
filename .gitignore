@@ -1,0 +1,10 @@
+.cache/
+build/
+obj-intel64/
+openfhe-PRNGControl/
+*out
+*txt
+*png
+*csv
+*log
+
