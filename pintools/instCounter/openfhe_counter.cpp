@@ -1,4 +1,4 @@
-// openfhe_ckks_counter.cpp
+// openfhe_ckks_counter_improved.cpp
 #include "pin.H"
 #include <iostream>
 #include <fstream>
@@ -8,6 +8,7 @@
 #include <tuple>
 #include <iomanip>
 #include <vector>
+#include <set>
 
 using std::cerr;
 using std::cout;
@@ -20,23 +21,31 @@ using std::stack;
 using std::string;
 using std::tie;
 using std::vector;
+using std::set;
 
 // -----------------------------------------------------------------
 // Configuración
 // -----------------------------------------------------------------
 static const string START_MARKER = "start_measurement";
 static const string END_MARKER   = "end_measurement";
-static const int CALL_HIERARCHY_DEPTH = 10; // función actual + 3 padres
+static const int CALL_HIERARCHY_DEPTH = 10;
 
 // -----------------------------------------------------------------
-// Estado global
+// Estado global mejorado
 // -----------------------------------------------------------------
 static BOOL measuring = FALSE;
+static BOOL measurement_ended = FALSE;  // Nueva bandera para terminar completamente
+static BOOL start_found = FALSE;        // Para saber si ya encontramos el start
 static ofstream output_file;
 static stack<string> call_stack;
+static set<string> measured_functions;  // Funciones que están en la región de medición
+
+// Variables para control de hilos
+static PIN_THREAD_UID main_thread_uid;
+static BOOL main_thread_initialized = FALSE;
 
 // -----------------------------------------------------------------
-// Categorías de instrucciones optimizadas para CKKS
+// Categorías de instrucciones (igual que antes)
 // -----------------------------------------------------------------
 enum InstructionType {
     INT_ADD, INT_SUB, INT_MUL, INT_DIV,
@@ -73,7 +82,6 @@ static string typeToString(InstructionType t) {
     }
 }
 
-// Clasificación mejorada para operaciones CKKS
 static InstructionType classifyInstruction(INS ins) {
     string mnemonic = INS_Mnemonic(ins);
     UINT32 category = INS_Category(ins);
@@ -84,7 +92,7 @@ static InstructionType classifyInstruction(INS ins) {
     if (mnemonic.find("IMUL") == 0 || mnemonic.find("MUL") == 0) return INT_MUL;
     if (mnemonic.find("IDIV") == 0 || mnemonic.find("DIV") == 0) return INT_DIV;
 
-    // Shifts (importantes para OpenFHE)
+    // Shifts
     if (mnemonic.find("SHL") != string::npos || mnemonic.find("SAL") != string::npos) return SHIFT_LEFT;
     if (mnemonic.find("SHR") != string::npos || mnemonic.find("SAR") != string::npos) return SHIFT_RIGHT;
 
@@ -104,20 +112,12 @@ static InstructionType classifyInstruction(INS ins) {
         mnemonic.find("DIVSD") != string::npos) return FLOAT_DIV;
 
     // SIMD específico por categoría
-    if (category == XED_CATEGORY_AVX512) {
-        return AVX512_PACKED;
-    }
-    if (category == XED_CATEGORY_AVX2) {
-        return AVX2_PACKED;
-    }
-    if (category == XED_CATEGORY_AVX) {
-        return AVX_PACKED;
-    }
-    if (category == XED_CATEGORY_SSE || category == XED_CATEGORY_MMX) {
-        return SSE_PACKED;
-    }
+    if (category == XED_CATEGORY_AVX512) return AVX512_PACKED;
+    if (category == XED_CATEGORY_AVX2) return AVX2_PACKED;
+    if (category == XED_CATEGORY_AVX) return AVX_PACKED;
+    if (category == XED_CATEGORY_SSE || category == XED_CATEGORY_MMX) return SSE_PACKED;
 
-    // Operaciones vectoriales empaquetadas (importantes para CKKS)
+    // Operaciones vectoriales empaquetadas
     if (mnemonic.find("PADD") == 0 || mnemonic.find("VPADD") == 0) return VECTOR_INT;
     if (mnemonic.find("PSUB") == 0 || mnemonic.find("VPSUB") == 0) return VECTOR_INT;
     if (mnemonic.find("PMUL") == 0 || mnemonic.find("VPMUL") == 0) return VECTOR_INT;
@@ -128,56 +128,39 @@ static InstructionType classifyInstruction(INS ins) {
     return UNKNOWN_TYPE;
 }
 
-// Estructura para la clave del mapa de contadores
+// Estructura para la clave del mapa
 struct CounterKey {
     string instruction_type;
     string current_function;
-    string parent_1;
-    string parent_2;
-    string parent_3;
-    string parent_4;
-    string parent_5;
-    string parent_6;
-    string parent_7;
-    string parent_8;
-    string parent_9;
+    string parent_1, parent_2, parent_3, parent_4, parent_5;
+    string parent_6, parent_7, parent_8, parent_9;
 
     bool operator<(const CounterKey& other) const {
-        return tie(instruction_type, current_function, parent_1, parent_2, parent_3, parent_4, parent_5, parent_6, parent_7, parent_8, parent_9) <
-               tie(other.instruction_type, other.current_function, other.parent_1, other.parent_2, other.parent_3, other.parent_4, other.parent_5, other.parent_6, other.parent_7, other.parent_8, other.parent_9);
+        return tie(instruction_type, current_function, parent_1, parent_2, parent_3,
+                   parent_4, parent_5, parent_6, parent_7, parent_8, parent_9) <
+               tie(other.instruction_type, other.current_function, other.parent_1,
+                   other.parent_2, other.parent_3, other.parent_4, other.parent_5,
+                   other.parent_6, other.parent_7, other.parent_8, other.parent_9);
     }
 };
 
 static map<CounterKey, UINT64> instruction_counts;
 
-// Función para obtener la jerarquía de llamadas actual
 static CounterKey getCallHierarchy(const string& instruction_type) {
     CounterKey key;
     key.instruction_type = instruction_type;
-
-    // Inicializar todos los campos
     key.current_function = "UNKNOWN";
-    key.parent_1 = "";
-    key.parent_2 = "";
-    key.parent_3 = "";
-    key.parent_4 = "";
-    key.parent_5 = "";
-    key.parent_6 = "";
-    key.parent_7 = "";
-    key.parent_8 = "";
-    key.parent_9 = "";
+    key.parent_1 = key.parent_2 = key.parent_3 = key.parent_4 = key.parent_5 = "";
+    key.parent_6 = key.parent_7 = key.parent_8 = key.parent_9 = "";
 
     if (!call_stack.empty()) {
         vector<string> hierarchy;
-
-        // Copiar el stack a un vector para acceso fácil
         stack<string> temp_stack = call_stack;
         while (!temp_stack.empty()) {
             hierarchy.push_back(temp_stack.top());
             temp_stack.pop();
         }
 
-        // Asignar jerarquía (el top del stack es la función actual)
         if (hierarchy.size() >= 1) key.current_function = hierarchy[0];
         if (hierarchy.size() >= 2) key.parent_1 = hierarchy[1];
         if (hierarchy.size() >= 3) key.parent_2 = hierarchy[2];
@@ -193,9 +176,19 @@ static CounterKey getCallHierarchy(const string& instruction_type) {
     return key;
 }
 
-// Función de análisis llamada por cada instrucción
+
+// Verificar si estamos en el hilo principal
+BOOL IsMainThread() {
+    if (!main_thread_initialized) return TRUE;
+    return PIN_ThreadUid() == main_thread_uid;
+}
+
 VOID AnalyzeInstruction(UINT32 instruction_type_val) {
-    if (!measuring) return;
+    // Salida temprana si ya terminamos la medición
+    if (measurement_ended) return;
+
+    // Solo medir en el hilo principal y durante la medición
+    if (!measuring || !IsMainThread()) return;
 
     InstructionType type = static_cast<InstructionType>(instruction_type_val);
     string type_str = typeToString(type);
@@ -206,38 +199,63 @@ VOID AnalyzeInstruction(UINT32 instruction_type_val) {
     instruction_counts[key]++;
 }
 
-static const std::vector<std::string> blacklistMang = {
-    "malloc",      // atrapar malloc / calloc / free
-    "calloc",
-    "free",
-    "_ZSt",        // todo lo que empiece con std:: (std:: = St)
-    "_Znwm",       // operador new (unsigned long) → operator new(unsigned long)
-    "_ZdlPv",      // operador delete(void*)
-    "_ZN2bl",      // namespace blake2 (algo como _ZN2blake…)
-    "sodium",      // si usás libsodium
-    // …y agregá más según lo que veas en tus logs con nm o objdump
-};
-
-bool is_blacklisted(const std::string &mangled) {
-    for (auto &pat : blacklistMang) {
-        if (mangled.find(pat) != std::string::npos)
-            return true;
-    }
-    return false;
-}
-
 VOID OnRoutineEntry(std::string* name) {
-    const std::string &m = *name;
-    if (!measuring)// || is_blacklisted(m))
-        return;      // no apilarla
-    call_stack.push(m);
+    if (measurement_ended) return;
+
+    const std::string &func_name = *name;
+
+    // Solo en hilo principal
+    if (!IsMainThread()) return;
+
+    if (measuring) {
+        call_stack.push(func_name);
+        measured_functions.insert(func_name);
+    }
 }
 
 VOID OnRoutineExit() {
+    if (measurement_ended) return;
+
+    // Solo en hilo principal
+    if (!IsMainThread()) return;
+
     if (measuring && !call_stack.empty()) {
         call_stack.pop();
     }
 }
+
+// Funciones para los marcadores
+VOID OnStartMeasurement() {
+    if (!IsMainThread()) return;
+
+    measuring = TRUE;
+    start_found = TRUE;
+
+    // Inicializar hilo principal si no está inicializado
+    if (!main_thread_initialized) {
+        main_thread_uid = PIN_ThreadUid();
+        main_thread_initialized = TRUE;
+    }
+
+    cout << "[PIN] *** INICIO DE MEDICIÓN *** (Hilo: " << PIN_ThreadUid() << ")" << endl;
+}
+
+VOID OnEndMeasurement() {
+    if (!IsMainThread()) return;
+
+    measuring = FALSE;
+    measurement_ended = TRUE;  // Marcar como terminado completamente
+
+    cout << "[PIN] *** FIN DE MEDICIÓN *** (Hilo: " << PIN_ThreadUid() << ")" << endl;
+    cout << "[PIN] Funciones medidas: " << measured_functions.size() << endl;
+
+    // Opcionalmente, forzar la salida aquí
+    // PIN_ExitProcess(0);
+}
+
+// -----------------------------------------------------------------
+// Instrumentación
+// -----------------------------------------------------------------
 
 VOID InstrumentRoutine(RTN rtn, VOID* v) {
     string routine_name = RTN_Name(rtn);
@@ -245,36 +263,35 @@ VOID InstrumentRoutine(RTN rtn, VOID* v) {
     // Detectar marcadores de inicio/fin
     if (routine_name == START_MARKER) {
         RTN_Open(rtn);
-        RTN_InsertCall(rtn, IPOINT_BEFORE, AFUNPTR(+[]() {
-            measuring = TRUE;
-            cout << "[PIN] *** INICIO DE MEDICIÓN ***" << endl;
-        }), IARG_END);
+        RTN_InsertCall(rtn, IPOINT_BEFORE, AFUNPTR(OnStartMeasurement), IARG_END);
         RTN_Close(rtn);
         return;
     }
 
     if (routine_name == END_MARKER) {
         RTN_Open(rtn);
-        RTN_InsertCall(rtn, IPOINT_BEFORE, AFUNPTR(+[]() {
-            measuring = FALSE;
-            cout << "[PIN] *** FIN DE MEDICIÓN ***" << endl;
-        }), IARG_END);
+        RTN_InsertCall(rtn, IPOINT_BEFORE, AFUNPTR(OnEndMeasurement), IARG_END);
         RTN_Close(rtn);
         return;
     }
+
+    // Solo instrumentar rutinas normales si no hemos terminado la medición
+    if (measurement_ended) return;
 
     RTN_Open(rtn);
 
     string* name_ptr = new string(routine_name);
     RTN_InsertCall(rtn, IPOINT_BEFORE, AFUNPTR(OnRoutineEntry),
                    IARG_PTR, name_ptr, IARG_END);
-
     RTN_InsertCall(rtn, IPOINT_AFTER, AFUNPTR(OnRoutineExit), IARG_END);
 
     RTN_Close(rtn);
 }
 
 VOID InstrumentInstruction(INS ins, VOID* v) {
+    // Si ya terminamos la medición, no instrumentar más instrucciones
+    if (measurement_ended) return;
+
     InstructionType type = classifyInstruction(ins);
     if (type == UNKNOWN_TYPE) return;
 
@@ -286,8 +303,11 @@ VOID InstrumentInstruction(INS ins, VOID* v) {
 
 VOID Finish(INT32 code, VOID* v) {
     cout << "[PIN] Escribiendo resultados..." << endl;
+    cout << "[PIN] Total de funciones en región medida: " << measured_functions.size() << endl;
 
-    output_file << "Tipo_Instruccion,Conteo,Funcion_Actual,Funcion_Padre_1,Funcion_Padre_2,Funcion_Padre_3,Funcion_Padre_4,Funcion_Padre_5,Funcion_Padre_6,Funcion_Padre_7,Funcion_Padre_8,Funcion_Padre_9,\n";
+    output_file << "Tipo_Instruccion,Conteo,Funcion_Actual,Funcion_Padre_1,Funcion_Padre_2,";
+    output_file << "Funcion_Padre_3,Funcion_Padre_4,Funcion_Padre_5,Funcion_Padre_6,";
+    output_file << "Funcion_Padre_7,Funcion_Padre_8,Funcion_Padre_9\n";
 
     for (const auto& entry : instruction_counts) {
         const CounterKey& key = entry.first;
@@ -335,7 +355,7 @@ int main(int argc, char* argv[]) {
     INS_AddInstrumentFunction(InstrumentInstruction, nullptr);
     PIN_AddFiniFunction(Finish, nullptr);
 
-    cout << "[PIN] OpenFHE CKKS Instruction Counter iniciado" << endl;
+    cout << "[PIN] OpenFHE CKKS Instruction Counter iniciado (mejorado)" << endl;
     cout << "[PIN] Esperando marcadores start_measurement/end_measurement..." << endl;
 
     PIN_StartProgram();

@@ -21,8 +21,24 @@ def infer_separator(path: str) -> str:
     """Detecta el separador del CSV"""
     try:
         with open(path, 'r', encoding='utf-8') as f:
-            first_line = f.readline()
-        return '\t' if '\t' in first_line else ','
+            first_line = f.readline().strip()
+
+        print(f"[DEBUG] Primera línea: {repr(first_line)}")
+
+        # Contar delimitadores
+        comma_count = first_line.count(',')
+        tab_count = first_line.count('\t')
+        semicolon_count = first_line.count(';')
+
+        print(f"[DEBUG] Comas: {comma_count}, Tabs: {tab_count}, Punto y coma: {semicolon_count}")
+
+        if tab_count > comma_count and tab_count > semicolon_count:
+            return '\t'
+        elif semicolon_count > comma_count:
+            return ';'
+        else:
+            return ','
+
     except Exception as e:
         print(f"[ERROR] No se pudo leer {path}: {e}")
         sys.exit(1)
@@ -34,28 +50,47 @@ def load_and_validate_csv(csv_path: str) -> pd.DataFrame:
         sys.exit(1)
 
     sep = infer_separator(csv_path)
-    print(f"[INFO] Detectado separador: '{sep}'")
+    print(f"[INFO] Detectado separador: {repr(sep)}")
 
     try:
-        df = pd.read_csv(csv_path, sep=sep, skip_blank_lines=True, on_bad_lines='skip')
+        # Leer CSV con manejo robusto de errores
+        df = pd.read_csv(csv_path, sep=sep, skipinitialspace=True,
+                        skip_blank_lines=True, on_bad_lines='skip')
+
+        # Limpiar nombres de columnas (remover espacios y caracteres raros)
+        df.columns = df.columns.str.strip()
+
         print(f"[INFO] Cargadas {len(df)} filas")
         print(f"[INFO] Columnas disponibles: {list(df.columns)}")
 
-        # Validar columnas esperadas
-        expected_cols = ['Tipo_Instruccion', 'Funcion_Actual', 'Funcion_Padre_1',
-                        'Funcion_Padre_2', 'Funcion_Padre_3', 'Conteo']
+        # Validar que tengamos al menos las columnas básicas
+        required_cols = ['Tipo_Instruccion', 'Conteo', 'Funcion_Actual']
+        missing_cols = [col for col in required_cols if col not in df.columns]
 
-        if not all(col in df.columns for col in expected_cols):
-            print(f"[ERROR] Columnas esperadas: {expected_cols}")
+        if missing_cols:
+            print(f"[ERROR] Columnas requeridas faltantes: {missing_cols}")
             print(f"[ERROR] Columnas encontradas: {list(df.columns)}")
             sys.exit(1)
 
         # Convertir conteo a entero
         df['Conteo'] = pd.to_numeric(df['Conteo'], errors='coerce')
+
+        # Remover filas con conteo inválido
+        initial_rows = len(df)
         df = df.dropna(subset=['Conteo'])
+        df = df[df['Conteo'] > 0]  # Solo conteos positivos
         df['Conteo'] = df['Conteo'].astype(int)
 
+        rows_after_cleaning = len(df)
+        if initial_rows != rows_after_cleaning:
+            print(f"[INFO] Removidas {initial_rows - rows_after_cleaning} filas con conteo inválido")
+
         print(f"[INFO] Datos válidos después de limpieza: {len(df)} filas")
+
+        if len(df) == 0:
+            print("[ERROR] No quedan datos válidos después de la limpieza")
+            sys.exit(1)
+
         return df
 
     except Exception as e:
@@ -68,27 +103,47 @@ def get_function_column(hierarchy_level: int) -> str:
         0: 'Funcion_Actual',
         1: 'Funcion_Padre_1',
         2: 'Funcion_Padre_2',
-        3: 'Funcion_Padre_3'
+        3: 'Funcion_Padre_3',
+        4: 'Funcion_Padre_4',
+        5: 'Funcion_Padre_5',
+        6: 'Funcion_Padre_6',
+        7: 'Funcion_Padre_7',
+        8: 'Funcion_Padre_8',
+        9: 'Funcion_Padre_9'
     }
     return hierarchy_map.get(hierarchy_level, 'Funcion_Actual')
 
-def create_function_identifier(row: pd.Series, hierarchy_level: int) -> str:
+def create_function_identifier(row: pd.Series, hierarchy_level: int, df_columns: List[str], only_first_and_last = False) -> str:
     """Crea un identificador de función según el nivel de jerarquía"""
     if hierarchy_level == 0:
-        return row['Funcion_Actual']
+        actual = str(row.get('Funcion_Actual', '')).strip()
+        return actual if actual else "UNKNOWN"
 
     # Construir jerarquía completa hasta el nivel especificado
     parts = []
+    # Determinar cuántos niveles de padre tenemos disponibles
+    max_available_level = 0
+    for i in range(1, 10):
+        col_name = f'Funcion_Padre_{i}'
+        if col_name in df_columns:
+            max_available_level = i
+        else:
+            break
 
     # Agregar padres en orden inverso (del más lejano al más cercano)
-    for level in range(min(hierarchy_level, 3), 0, -1):
+    for level in range(min(hierarchy_level, max_available_level), 0, -1):
         col_name = get_function_column(level)
-        if col_name in row and row[col_name] and str(row[col_name]).strip():
-            parts.append(str(row[col_name]).strip())
+        if col_name in row and pd.notna(row[col_name]):
+            padre_value = str(row[col_name]).strip()
+            if padre_value and padre_value != '':
+                parts.append(padre_value)
 
+    if only_first_and_last and len(parts) > 2:
+        parts = [parts[0], parts[-1]]
     # Agregar función actual
-    if row['Funcion_Actual'] and str(row['Funcion_Actual']).strip():
-        parts.append(str(row['Funcion_Actual']).strip())
+    actual = str(row.get('Funcion_Actual', '')).strip()
+    if actual:
+        parts.append(actual)
 
     return " -> ".join(parts) if parts else "UNKNOWN"
 
@@ -126,19 +181,23 @@ def plot_instruction_categories(df: pd.DataFrame, output_prefix: str = "openfhe"
     return cat_counts
 
 def plot_top_functions(df: pd.DataFrame, hierarchy_level: int = 0, top_n: int = 15,
-                      output_prefix: str = "openfhe"):
+                      output_prefix: str = "openfhe", only_first_and_last= False):
     """Genera histograma de top funciones según nivel de jerarquía"""
     print(f"[INFO] Generando gráfico de top {top_n} funciones (nivel jerarquía: {hierarchy_level})...")
 
     # Crear identificadores de función según jerarquía
     df_copy = df.copy()
     df_copy['Function_ID'] = df_copy.apply(
-        lambda row: create_function_identifier(row, hierarchy_level), axis=1
+        lambda row: create_function_identifier(row, hierarchy_level, list(df.columns), only_first_and_last), axis=1
     )
 
     # Filtrar funciones vacías o unknown
     df_copy = df_copy[df_copy['Function_ID'] != "UNKNOWN"]
     df_copy = df_copy[df_copy['Function_ID'].str.strip() != ""]
+
+    if len(df_copy) == 0:
+        print("[WARNING] No se encontraron funciones válidas después del filtrado")
+        return None
 
     # Agrupar por función y sumar conteos
     func_counts = df_copy.groupby('Function_ID')['Conteo'].sum().sort_values(ascending=False)
@@ -152,8 +211,8 @@ def plot_top_functions(df: pd.DataFrame, hierarchy_level: int = 0, top_n: int = 
     display_names = []
     for name in top_functions.index:
         # Truncar nombres muy largos
-        if len(name) > 100:
-            name = name[:97] + "..."
+        if len(name) > 200:
+            name = name[:197] + "..."
         wrapped = "\n".join(textwrap.wrap(name, width=50))
         display_names.append(wrapped)
 
@@ -164,9 +223,15 @@ def plot_top_functions(df: pd.DataFrame, hierarchy_level: int = 0, top_n: int = 
                    color=sns.color_palette("viridis", len(top_functions)))
 
     # Configurar títulos y etiquetas
-    hierarchy_labels = ["Función Actual", "Función -> Padre 1", "Función -> Padre 1 -> Padre 2",
-                       "Función -> Padre 1 -> Padre 2 -> Padre 3"]
-    title = f'Top {top_n} Funciones por Instrucciones\n({hierarchy_labels[min(hierarchy_level, 3)]})'
+    hierarchy_labels = {
+        0: "Función Actual",
+        1: "Función -> Padre 1",
+        2: "Función -> Padre 1 -> Padre 2",
+        3: "Función -> Padre 1 -> Padre 2 -> Padre 3"
+    }
+
+    label = hierarchy_labels.get(hierarchy_level, f"Función -> Padres (nivel {hierarchy_level})")
+    title = f'Top {top_n} Funciones por Instrucciones\n({label})'
 
     ax.set_title(title, fontsize=16, fontweight='bold', pad=20)
     ax.set_xlabel('Número de Instrucciones', fontsize=12)
@@ -177,8 +242,9 @@ def plot_top_functions(df: pd.DataFrame, hierarchy_level: int = 0, top_n: int = 
     ax.invert_yaxis()
 
     # Agregar valores en las barras
+    max_value = max(top_functions.values)
     for i, (bar, value) in enumerate(zip(bars, top_functions.values)):
-        ax.text(bar.get_width() + max(top_functions.values)*0.01, bar.get_y() + bar.get_height()/2,
+        ax.text(bar.get_width() + max_value*0.01, bar.get_y() + bar.get_height()/2,
                f'{value:,}', ha='left', va='center', fontsize=10)
 
     ax.grid(axis='x', alpha=0.3)
@@ -195,18 +261,23 @@ def plot_top_functions(df: pd.DataFrame, hierarchy_level: int = 0, top_n: int = 
     return top_functions
 
 def plot_instruction_heatmap(df: pd.DataFrame, hierarchy_level: int = 0,
-                           top_functions: int = 10, output_prefix: str = "openfhe"):
+                           top_functions: int = 10, output_prefix: str = "openfhe", only_first_and_last=False):
     """Genera heatmap de instrucciones por función"""
     print(f"[INFO] Generando heatmap de instrucciones...")
 
     # Crear identificadores de función
     df_copy = df.copy()
     df_copy['Function_ID'] = df_copy.apply(
-        lambda row: create_function_identifier(row, hierarchy_level), axis=1
+        lambda row: create_function_identifier(row, hierarchy_level, list(df.columns),only_first_and_last), axis=1
     )
 
     # Filtrar y tomar top funciones
     df_filtered = df_copy[df_copy['Function_ID'] != "UNKNOWN"]
+
+    if len(df_filtered) == 0:
+        print("[WARNING] No hay funciones válidas para heatmap")
+        return
+
     top_func_names = df_filtered.groupby('Function_ID')['Conteo'].sum().nlargest(top_functions).index
     df_heatmap = df_filtered[df_filtered['Function_ID'].isin(top_func_names)]
 
@@ -247,7 +318,7 @@ def plot_instruction_heatmap(df: pd.DataFrame, hierarchy_level: int = 0,
 
     print(f"[SUCCESS] Guardado: {filename}")
 
-def print_summary_stats(df: pd.DataFrame, hierarchy_level: int = 0):
+def print_summary_stats(df: pd.DataFrame, hierarchy_level: int = 0, only_first_and_last=False):
     """Imprime estadísticas de resumen"""
     print("\n" + "="*60)
     print("RESUMEN ESTADÍSTICO")
@@ -259,7 +330,7 @@ def print_summary_stats(df: pd.DataFrame, hierarchy_level: int = 0):
 
     df_copy = df.copy()
     df_copy['Function_ID'] = df_copy.apply(
-        lambda row: create_function_identifier(row, hierarchy_level), axis=1
+        lambda row: create_function_identifier(row, hierarchy_level, list(df.columns), only_first_and_last), axis=1
     )
     unique_functions = df_copy['Function_ID'].nunique()
 
@@ -276,11 +347,15 @@ def print_summary_stats(df: pd.DataFrame, hierarchy_level: int = 0):
 
     # Top 5 funciones
     print(f"\nTop 5 funciones (nivel jerarquía {hierarchy_level}):")
-    top_funcs = df_copy.groupby('Function_ID')['Conteo'].sum().nlargest(5)
-    for i, (func, count) in enumerate(top_funcs.items(), 1):
-        percentage = (count / total_instructions) * 100
-        func_display = func[:80] + "..." if len(func) > 80 else func
-        print(f"  {i}. {func_display}: {count:,} ({percentage:.1f}%)")
+    df_valid = df_copy[df_copy['Function_ID'] != "UNKNOWN"]
+    if len(df_valid) > 0:
+        top_funcs = df_valid.groupby('Function_ID')['Conteo'].sum().nlargest(5)
+        for i, (func, count) in enumerate(top_funcs.items(), 1):
+            percentage = (count / total_instructions) * 100
+            func_display = func[:80] + "..." if len(func) > 80 else func
+            print(f"  {i}. {func_display}: {count:,} ({percentage:.1f}%)")
+    else:
+        print("  No se encontraron funciones válidas")
 
 def main():
     parser = argparse.ArgumentParser(
@@ -292,16 +367,20 @@ Ejemplos de uso:
   python openfhe_analyzer.py data.csv -l 1               # Con jerarquía padre 1
   python openfhe_analyzer.py data.csv -l 2 -t 20         # Top 20, jerarquía padre 2
   python openfhe_analyzer.py data.csv -l 0 -o results    # Personalizar salida
-        """
+  python openfhe_analyzer.py data.csv -l 0 -h 0    #  solo muestra el primero y ultimo de la jerarquia
+  """
     )
 
     parser.add_argument('csv_file', help='Archivo CSV de datos OpenFHE')
-    parser.add_argument('-l', '--hierarchy-level', type=int, default=0, choices=[0,1,2,3],
-                       help='Nivel de jerarquía (0=actual, 1=+padre1, 2=+padre2, 3=+padre3)')
+    parser.add_argument('-l', '--hierarchy-level', type=int, default=0,
+                       help='Nivel de jerarquía (0=actual, 1=+padre1, 2=+padre2, etc.)')
     parser.add_argument('-t', '--top-n', type=int, default=15,
                        help='Número de top funciones a mostrar (default: 15)')
     parser.add_argument('-o', '--output-prefix', default='openfhe',
                        help='Prefijo para archivos de salida (default: openfhe)')
+    parser.add_argument('--child_father', type=int, choices=[0, 1], default=1,
+                    help='1 = mostrar todos los padres (default), 0 = solo primer y último padre')
+
     parser.add_argument('--no-heatmap', action='store_true',
                        help='Omitir generación de heatmap')
     parser.add_argument('--heatmap-functions', type=int, default=10,
@@ -316,19 +395,20 @@ Ejemplos de uso:
     print(f"Nivel jerarquía: {args.hierarchy_level}")
     print(f"Top N funciones: {args.top_n}")
     print(f"Prefijo salida: {args.output_prefix}")
+    print(f"Hijos mostrados: {args.child_father}")
 
     # Cargar datos
     df = load_and_validate_csv(args.csv_file)
 
     # Generar análisis
     plot_instruction_categories(df, args.output_prefix)
-    plot_top_functions(df, args.hierarchy_level, args.top_n, args.output_prefix)
+    plot_top_functions(df, args.hierarchy_level, args.top_n, args.output_prefix, args.child_father)
 
     if not args.no_heatmap:
-        plot_instruction_heatmap(df, args.hierarchy_level, args.heatmap_functions, args.output_prefix)
+        plot_instruction_heatmap(df, args.hierarchy_level, args.heatmap_functions, args.output_prefix, args.child_father)
 
     # Mostrar estadísticas
-    print_summary_stats(df, args.hierarchy_level)
+    print_summary_stats(df, args.hierarchy_level, args.child_father)
 
     print(f"\n[SUCCESS] Análisis completado. Revisa los archivos {args.output_prefix}_*.png")
 

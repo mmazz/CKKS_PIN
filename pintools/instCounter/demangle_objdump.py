@@ -120,72 +120,125 @@ def clean_function_name(func_name: str) -> str:
 
     return func_name
 
-def process_csv(csv_input: str, csv_output: str,
-                symbol_map: Dict[str, str]):
+def detect_delimiter(file_path: str) -> str:
+    """
+    Detecta automáticamente el delimitador del CSV
+    """
+    with open(file_path, 'r', encoding='utf-8') as f:
+        # Leer las primeras líneas para detectar el delimitador
+        sample = f.read(1024)
+        f.seek(0)
+        first_line = f.readline().strip()
+
+    print(f"[DEBUG] Primera línea: {repr(first_line)}")
+
+    # Contar posibles delimitadores
+    delimiters = [',', '\t', ';', '|']
+    delimiter_counts = {}
+
+    for delim in delimiters:
+        count = first_line.count(delim)
+        if count > 0:
+            delimiter_counts[delim] = count
+
+    if delimiter_counts:
+        # Elegir el delimitador más común
+        best_delimiter = max(delimiter_counts.items(), key=lambda x: x[1])[0]
+        print(f"[INFO] Delimitador detectado: {repr(best_delimiter)} (aparece {delimiter_counts[best_delimiter]} veces)")
+        return best_delimiter
+    else:
+        print("[WARNING] No se detectó delimitador, usando coma por defecto")
+        return ','
+
+def process_csv(csv_input: str, csv_output: str, symbol_map: Dict[str, str]):
     """
     Procesa el CSV de entrada y genera uno con nombres demangled,
-    detectando automáticamente cuántas columnas “padre” hay.
+    detectando automáticamente cuántas columnas "padre" hay.
     """
     print(f"[INFO] Procesando {csv_input} -> {csv_output}")
     if not os.path.exists(csv_input):
         print(f"[ERROR] El archivo CSV {csv_input} no existe")
         sys.exit(1)
 
+    # Detectar delimitador automáticamente
+    delimiter = detect_delimiter(csv_input)
+
     with open(csv_input, 'r', encoding='utf-8') as fin, \
          open(csv_output, 'w', encoding='utf-8', newline='') as fout:
 
-        reader = csv.reader(fin)
-        writer = csv.writer(fout)
+        reader = csv.reader(fin, delimiter=delimiter)
+        writer = csv.writer(fout, delimiter=delimiter)
 
-        # --- Leer y reescribir header (sin validar longitudes) ---
+        # Leer y reescribir header
         header = next(reader, None)
         if not header:
             print("[ERROR] CSV vacío")
             return
+
+        # Limpiar header (remover elementos vacíos al final)
+        while header and header[-1].strip() == '':
+            header.pop()
+
+        # Limpiar cada elemento del header
+        header = [col.strip() for col in header]
+
+        print(f"[INFO] Header limpio: {header}")
+        print(f"[INFO] Número total de columnas: {len(header)}")
         writer.writerow(header)
 
-        # --- Inferir número de “padres” según columnas restantes ---
-        # Asumimos: [ tipo_instr, conteo, func_actual, padre_1, ..., padre_N ]
-        if len(header) < 4:
-            print(f"[ERROR] Header demasiado corto ({len(header)} cols).")
+        # Inferir número de columnas de funciones padre
+        # Formato esperado: Tipo_Instruccion, Conteo, Funcion_Actual, Funcion_Padre_1, ..., Funcion_Padre_N
+        if len(header) < 3:
+            print(f"[ERROR] Header demasiado corto ({len(header)} columnas)")
             return
-        num_parents = len(header) - 3
-        print(f"[INFO] Detectado num_parents = {num_parents}")
+
+        num_parents = len(header) - 3  # Total menos las primeras 3 columnas
+        print(f"[INFO] Detectadas {num_parents} columnas de funciones padre")
 
         processed = demangled = 0
 
         for row_num, row in enumerate(reader, 1):
-            if len(row) < 3 + num_parents:
-                print(f"[WARNING] Fila {row_num} tiene {len(row)} columnas, "
-                      f"esperadas ≥ {3 + num_parents}: {row}")
+            if not row or len(row) == 0:  # Saltar filas vacías
+                continue
+
+            # Completar fila con valores vacíos si es más corta que el header
+            while len(row) < len(header):
+                row.append("")
+
+            if len(row) < 3:
+                print(f"[WARNING] Fila {row_num} demasiado corta: {row}")
                 continue
 
             # Extraer campos por posición
-            tipo_instr  = row[0]
-            conteo      = row[1]
+            tipo_instr = row[0]
+            conteo = row[1]
             func_actual = row[2]
-            padres      = row[3:3+num_parents]
 
-            # Demangle & clean sobre cada uno
-            func_actual_clean = clean_function_name(
-                demangle_function_name(func_actual, symbol_map)
-            )
-            padres_clean = []
-            for p in padres:
-                padres_clean.append(
-                    clean_function_name(
-                        demangle_function_name(p, symbol_map)
-                    ) if p else ""
-                )
+            # Obtener todas las columnas de funciones padre disponibles
+            padres = row[3:] if len(row) > 3 else []
+
+            # Demangle función actual
+            func_actual_demangled = demangle_function_name(func_actual, symbol_map)
+            func_actual_clean = clean_function_name(func_actual_demangled)
 
             if func_actual_clean != func_actual:
                 demangled += 1
 
-            # Escribo en el mismo orden que el header original
-            writer.writerow(
-                [tipo_instr, conteo, func_actual_clean]
-                + padres_clean
-            )
+            # Demangle funciones padre
+            padres_clean = []
+            for padre in padres:
+                if padre and padre.strip():
+                    padre_demangled = demangle_function_name(padre, symbol_map)
+                    padre_clean = clean_function_name(padre_demangled)
+                    padres_clean.append(padre_clean)
+                    if padre_clean != padre:
+                        demangled += 1
+                else:
+                    padres_clean.append("")
+
+            # Escribir fila procesada
+            new_row = [tipo_instr, conteo, func_actual_clean] + padres_clean
+            writer.writerow(new_row)
 
             processed += 1
             if processed % 1000 == 0:
@@ -198,18 +251,15 @@ def process_csv(csv_input: str, csv_output: str,
 
 
 def main():
-    if len(sys.argv) != 5:
-        print("Uso: python demangle_csv.py <ruta_binario> <csv_entrada> "
-              "<csv_salida> <num_parents>")
+    if len(sys.argv) != 4:
+        print("Uso: python demangle_csv.py <ruta_binario> <csv_entrada> <csv_salida>")
         print("Ejemplo:")
-        print("  python demangle_csv.py ./mi_programa "
-              "input.csv output.csv 3")
+        print("  python demangle_csv.py ./mi_programa input.csv output.csv")
         sys.exit(1)
 
     binary_path = sys.argv[1]
-    csv_input    = sys.argv[2]
-    csv_output   = sys.argv[3]
-    num_parents  = int(sys.argv[4])
+    csv_input = sys.argv[2]
+    csv_output = sys.argv[3]
 
     print("=" * 60)
     print("OpenFHE CSV Function Name Demangler")
@@ -218,7 +268,7 @@ def main():
     # Extraer símbolos del binario
     symbol_map = extract_symbols_from_binary(binary_path)
 
-    # Procesar CSV con el número dinámico de padres
+    # Procesar CSV detectando automáticamente el número de columnas padre
     process_csv(csv_input, csv_output, symbol_map)
 
     print("\n[SUCCESS] ¡Demangle completado exitosamente!")

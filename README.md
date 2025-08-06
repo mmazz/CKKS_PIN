@@ -53,3 +53,5 @@ nm -C ./test | grep 'Encrypt(' | grep 'PrivateKey'
 
 Cambio un poco la cosa, vamos a atacar las intrucciones aritmeticas de
 
+
+## Uso de config.conf

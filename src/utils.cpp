@@ -1,4 +1,41 @@
 #include "utils.h"
+const std::string DATAFOLDER = "/home/mmazz/CKKS_PIN/counterData";
+std::string ccLocation       = "/cryptocontext.txt";
+std::string pubKeyLocation   = "/key_pub.txt";
+std::string secKeyLocation   = "/key_sec.txt";
+std::string input_vec = "/input.txt";
+
+
+std::vector<double> load_vector(const std::string& filename) {
+    std::vector<double> vec;
+    std::ifstream file(filename);
+    if (!file.is_open()) {
+        std::cerr << "Error al abrir el archivo para lectura: " << filename << std::endl;
+        return vec;
+    }
+
+    double val;
+    while (file >> val) {
+        vec.push_back(val);
+    }
+
+    file.close();
+    return vec;
+}
+void save_vector(const std::vector<double>& vec, const std::string& filename) {
+    std::ofstream file(filename);
+    if (!file.is_open()) {
+        std::cerr << "Error al abrir el archivo para escritura: " << filename << std::endl;
+        return;
+    }
+
+    for (double val : vec) {
+        file << val << '\n';  // escribe cada valor en una línea nueva
+    }
+
+    file.close();
+}
+
 
 void testVoid(){
 }

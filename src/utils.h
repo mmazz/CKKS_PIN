@@ -14,6 +14,15 @@
 using namespace lbcrypto;
 
 using Integer  = intnat::NativeIntegerT<long unsigned int>;
+extern const std::string DATAFOLDER ;
+extern std::string ccLocation       ;
+extern std::string pubKeyLocation   ;
+extern std::string secKeyLocation   ;
+extern std::string input_vec ;
+
+std::vector<double> load_vector(const std::string& filename);
+void save_vector(const std::vector<double>& vec, const std::string& filename);
+
 
 
 void testVoid();

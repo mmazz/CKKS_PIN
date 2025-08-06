@@ -55,7 +55,7 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
-add_library(mainlib_common utils.cpp)
+add_library(mainlib_common STATIC utils.cpp)
 target_include_directories(mainlib_common PUBLIC src)
 
 add_executable(test test.cpp)
@@ -64,13 +64,6 @@ set_target_properties(test PROPERTIES
     BUILD_RPATH_USE_ORIGIN TRUE
 )
 target_link_libraries(test PRIVATE mainlib_common ${OpenFHE_SHARED_LIBRARIES})
-
-#add_executable(test_check test_checkpoint.cpp)
-#set_target_properties(test_check PROPERTIES
-#    BUILD_WITH_INSTALL_RPATH TRUE
-#    BUILD_RPATH_USE_ORIGIN TRUE
-#)
-#target_link_libraries(test_check PRIVATE mainlib_common ${OpenFHE_SHARED_LIBRARIES})
 
 add_executable(bitflip bitflip_ciphertext.cpp)
 set_target_properties(bitflip PROPERTIES
@@ -99,4 +92,18 @@ set_target_properties(counter PROPERTIES
     BUILD_RPATH_USE_ORIGIN TRUE
 )
 target_link_libraries(counter PRIVATE mainlib_common ${OpenFHE_SHARED_LIBRARIES})
+
+add_executable(counterContext  instructionCounter_context.cpp)
+set_target_properties(counterContext PROPERTIES
+    BUILD_WITH_INSTALL_RPATH TRUE
+    BUILD_RPATH_USE_ORIGIN TRUE
+)
+target_link_libraries(counterContext PRIVATE mainlib_common ${OpenFHE_SHARED_LIBRARIES})
+
+add_executable(test_counterContext  test_instructionContext.cpp)
+set_target_properties(test_counterContext PROPERTIES
+    BUILD_WITH_INSTALL_RPATH TRUE
+    BUILD_RPATH_USE_ORIGIN TRUE
+)
+target_link_libraries(test_counterContext PRIVATE mainlib_common ${OpenFHE_SHARED_LIBRARIES})
 
