@@ -20,7 +20,7 @@ NUM_COEFF=8
 BIT=50
 CKKS_CONFIG_PATH := $(HOME)/CKKS_PIN
 .PHONY: run-pin build-pin
-PIN_ROOT = ../pin/
+PIN_ROOT = ../../pin/
 # If the tool is built out of the kit, PIN_ROOT must be specified in the make invocation and point to the kit root.
 CONFIG_ROOT := $(PIN_ROOT)/source/tools/Config
 include $(CONFIG_ROOT)/makefile.config
@@ -32,7 +32,7 @@ build: obj-intel64/pintool_BitFlip_NTT.so
 
 run: build-pin
 	export CKKS_CONFIG_PATH=$(CKKS_CONFIG_PATH) && \
-	../pin/pin -t obj-intel64/pintool_BitFlip_NTT.so -label addr_label -addr_file target_address.txt -func $(TARGET_FUNC)  -format_func $(NTT_FUNC) -instr_index 0 -coeff $(COEFF) -bit $(BIT) -- ../../build/bin/bitflip
+	$(PIN_ROOT)/pin -t obj-intel64/pintool_BitFlip_NTT.so -label addr_label -addr_file target_address.txt -func $(TARGET_FUNC)  -format_func $(NTT_FUNC) -instr_index 0 -coeff $(COEFF) -bit $(BIT) -- ../../build/bin/bitflip
 
 
 build-pin: obj-intel64/pintool_BitFlip.so
@@ -40,14 +40,14 @@ build-pin: obj-intel64/pintool_BitFlip.so
 
 run-pin: build-pin
 	export CKKS_CONFIG_PATH=$(CKKS_CONFIG_PATH) && \
-	../pin/pin -t obj-intel64/pintool_BitFlip.so -label addr_file -addr_label target_address.txt -func $(TARGET_FUNC) -instr_index 0 -coeff $(COEFF) -bit $(BIT) -- ../../build/bin/bitflip
+	$(PIN_ROOT)/pin -t obj-intel64/pintool_BitFlip.so -label addr_file -addr_label target_address.txt -func $(TARGET_FUNC) -instr_index 0 -coeff $(COEFF) -bit $(BIT) -- ../../build/bin/bitflip
 
 build-pin-check: obj-intel64/pintool_BitFlip_checkpoint.so
 	$(MAKE) obj-intel64/pintool_BitFlip_checkpoint.so TARGET=intel64
 
 run-pin-check: build-pin-check
 	export CKKS_CONFIG_PATH=$(CKKS_CONFIG_PATH) && \
-	../pin/pin -t obj-intel64/pintool_BitFlip_checkpoint.so -label addr_label   \
+	$(PIN_ROOT)/pin -t obj-intel64/pintool_BitFlip_checkpoint.so -label addr_label   \
 				-addr_file target_address.txt -func $(TARGET_FUNC) -format_func $(NTT_FUNC) \
 				-instr_index 0 -num_coeffs $(NUM_COEFF) -enable_effect 1 -verbose 1 \
 				-full_restore 0 -- ../../build/bin/bitflip_check 1 1
@@ -57,7 +57,7 @@ build-pin-registers: obj-intel64/pintool_BitFlip_registers.so
 
 run-pin-registers: build-pin-registers
 	export CKKS_CONFIG_PATH=$(CKKS_CONFIG_PATH) && \
-	../pin/pin -t obj-intel64/pintool_BitFlip_registers.so -target_func $(TARGET_FUNC) \
+	$(PIN_ROOT)/pin -t obj-intel64/pintool_BitFlip_registers.so -target_func $(TARGET_FUNC) \
 				-target_arith 50 -target_bit 15 -logfile "encrypt_attack.log"\
 				--  ../../build/bin/bitflip_registers 1 1
 ##############################################################

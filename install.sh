@@ -39,10 +39,6 @@ make -j16
 cd ..
 cd pintools
 mkdir pin
-wget https://software.intel.com/sites/landingpage/pintool/downloads/pin-external-3.31-98869-gfa6f126a8-gcc-linux.tar.gz
-tar -xvzf pin-external-3.31-98869-gfa6f126a8-gcc-linux.tar.gz
-rm -rf pin-external-3.31-98869-gfa6f126a8-gcc-linux.tar.gz
-mv pin-external-3.31-98869-gfa6f126a8-gcc-linux/* pin/
-rmdir pin-external-3.31-98869-gfa6f126a8-gcc-linux
-patch -p0 < range.patch
-export CKKS_CONFIG_PATH="$HOME/CKKS_PIN"
+wget https://software.intel.com/sites/landingpage/pintool/downloads/pin-external-4.0-99633-g5ca9893f2-gcc-linux.tar.gz -O pin.tar.gz
+tar -xvzf pin.tar.gz
+rm -rf pin.tar.gz
