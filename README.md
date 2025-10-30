@@ -2,29 +2,19 @@
 # Install
 
 '''
-cmake -DCMAKE_PREFIX_PATH=$CURDIR/../openfhe-PRNGControl/install\
-      -DBUILD_STATIC=ON \
-      -DCMAKE_BUILD_TYPE=Debug \
-      -DCMAKE_CXX_FLAGS="-g -O3 -fno-pie -no-pie" ../src
-make -j16
+./install.sh
+'''
 
 # dependancys
 
--wget
--unzip
+- wget
+- unzip
 
 # PIN
 
 '''
 export CKKS_CONFIG_PATH="$HOME/CKKS_PIN"
-
 '''
-
-### Bug
-
-Hay un bug en: components/include/util/range.hpp
-
-en vez de m_base en la linea 102, tiene que ir _base.
 
 ## Use of PIN
 

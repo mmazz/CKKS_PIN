@@ -38,7 +38,16 @@ cmake -DCMAKE_PREFIX_PATH=$INSTALL_PATH_SRC -DBUILD_STATIC=ON -DCMAKE_BUILD_TYPE
 make -j16
 cd ..
 cd pintools
-mkdir pin
-wget https://software.intel.com/sites/landingpage/pintool/downloads/pin-external-4.0-99633-g5ca9893f2-gcc-linux.tar.gz -O pin.tar.gz
-tar -xvzf pin.tar.gz
-rm -rf pin.tar.gz
+if [[ ! -d "pintools/pin" ]]; then
+    wget https://software.intel.com/sites/landingpage/pintool/downloads/pin-external-4.0-99633-g5ca9893f2-gcc-linux.tar.gz -O pin.tar.gz
+    tar -xvzf pin.tar.gz
+    for d in pin*; do
+        if [ -d "$d" ]; then
+            mv "$d" pin
+            break
+        fi
+    done
+    rm -rf pin.tar.gz
+else
+    echo "Pin already exists."
+fi
