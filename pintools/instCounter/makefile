@@ -20,18 +20,32 @@ NUM_COEFF=8
 BIT=50
 CKKS_CONFIG_PATH := $(HOME)/CKKS_PIN
 .PHONY: run build
-
 PIN_ROOT = ../pin/
+
 # If the tool is built out of the kit, PIN_ROOT must be specified in the make invocation and point to the kit root.
 CONFIG_ROOT := $(PIN_ROOT)/source/tools/Config
 include $(CONFIG_ROOT)/makefile.config
 include makefile.rules
 include $(TOOLS_ROOT)/Config/makefile.default.rules
 
+build_add_inj: obj-intel64/add_inject.so
+	$(MAKE) obj-intel64/add_inject.so TARGET=intel64
+
+run_add_inj: build_add_inj
+	export CKKS_CONFIG_PATH=$(CKKS_CONFIG_PATH) && \
+	$(PIN_ROOT)/pin -t obj-intel64/add_inject.so -- ../../build/bin/simpleTest
+
+
+build_add: obj-intel64/add_counter.so
+	$(MAKE) obj-intel64/add_counter.so TARGET=intel64
+
+run_add: build_add
+	export CKKS_CONFIG_PATH=$(CKKS_CONFIG_PATH) && \
+	$(PIN_ROOT)/pin -t obj-intel64/add_counter.so -- ../../build/bin/simpleTest
+
 build: obj-intel64/openfhe_counter.so
 	$(MAKE) obj-intel64/openfhe_counter.so TARGET=intel64
 
 run: build
 	export CKKS_CONFIG_PATH=$(CKKS_CONFIG_PATH) && \
-	../pin/pin -t obj-intel64/openfhe_counter.so -- ../../build/bin/counter
-
+	$(PIN_ROOT)/pin -t obj-intel64/openfhe_counter.so -- ../../build/bin/counter

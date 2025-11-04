@@ -107,3 +107,10 @@ set_target_properties(test_counterContext PROPERTIES
 )
 target_link_libraries(test_counterContext PRIVATE mainlib_common ${OpenFHE_SHARED_LIBRARIES})
 
+add_executable(simpleTest simpleTest.cpp)
+set_target_properties(simpleTest PROPERTIES
+    BUILD_WITH_INSTALL_RPATH TRUE
+    BUILD_RPATH_USE_ORIGIN TRUE
+)
+target_link_libraries(simpleTest PRIVATE mainlib_common ${OpenFHE_SHARED_LIBRARIES})
+
